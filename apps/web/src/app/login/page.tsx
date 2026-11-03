@@ -5,13 +5,23 @@ import { browserClient } from "@/lib/supabase/client";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sent" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const { error } = await browserClient().auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${location.origin}/auth/callback`, shouldCreateUser: false },
     });
-    setState(error ? "error" : "sent");
+    if (!error) return setState("sent");
+    const code = (error as { code?: string }).code;
+    setErrorMsg(
+      code === "over_email_send_rate_limit"
+        ? "Se pidieron demasiados enlaces. Esperá una hora y probá de nuevo."
+        : code === "otp_disabled" || code === "signup_disabled" || error.status === 422
+          ? "Ese email no está habilitado para entrar."
+          : "No se pudo enviar el enlace. Probá de nuevo en un rato.",
+    );
+    setState("error");
   }
   return (
     <main className="min-h-screen grid place-items-center p-4">
@@ -21,7 +31,7 @@ export default function Login() {
           placeholder="tu@email.com" className="w-full rounded-md border border-zinc-300 px-3 py-2" />
         <button className="w-full rounded-md bg-zinc-900 py-2 text-white">Mandame el enlace</button>
         {state === "sent" && <p className="text-sm text-green-700">Revisá tu correo y abrí el enlace.</p>}
-        {state === "error" && <p className="text-sm text-red-700">No se pudo enviar. ¿El email está habilitado?</p>}
+        {state === "error" && <p className="text-sm text-red-700">{errorMsg}</p>}
       </form>
     </main>
   );
