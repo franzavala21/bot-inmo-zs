@@ -25,6 +25,7 @@ export interface TokkoProperty {
   room_amount?: number;
   suite_amount?: number;
   bathroom_amount?: number;
+  surface?: string | number;      // superficie del lote
   total_surface?: string | number;
   roofed_surface?: string | number;
   photos?: { image?: string; is_front_cover?: boolean }[];

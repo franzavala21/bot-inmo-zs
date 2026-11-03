@@ -1,7 +1,15 @@
 -- Esquema inicial. No editar una vez aplicada: crear 0002_..., 0003_...
 
-create extension if not exists pg_trgm;
-create extension if not exists unaccent;
+create schema if not exists extensions;
+create extension if not exists pg_trgm with schema extensions;
+create extension if not exists unaccent with schema extensions;
+
+-- unaccent() no es inmutable y Postgres no la acepta en columnas generadas.
+-- Este envoltorio fija el diccionario, así que sí lo es.
+create or replace function immutable_unaccent(text) returns text
+language sql immutable parallel safe strict set search_path = '' as $$
+  select extensions.unaccent('extensions.unaccent'::regdictionary, $1)
+$$;
 
 -- ───────── Usuarios permitidos (los dos dueños) ─────────
 create table allowed_users (
@@ -62,12 +70,12 @@ create table properties (
   owner_data jsonb,            -- NO publicable
   raw jsonb not null,
   search_text text generated always as (
-    lower(unaccent(coalesce(property_type,'') || ' ' || coalesce(title,'') || ' ' || coalesce(zone,'') || ' ' || coalesce(description,'')))
+    lower(immutable_unaccent(coalesce(property_type,'') || ' ' || coalesce(title,'') || ' ' || coalesce(zone,'') || ' ' || coalesce(description,'')))
   ) stored,
   first_seen_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index properties_search_trgm on properties using gin (search_text gin_trgm_ops);
+create index properties_search_trgm on properties using gin (search_text extensions.gin_trgm_ops);
 create index properties_filters on properties (operation, status, property_type, rooms, price);
 
 -- Lista blanca: lo único que puede leer el pipeline. Una columna nueva NO sale hasta agregarla acá a mano.

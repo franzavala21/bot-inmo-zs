@@ -34,6 +34,9 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+/** Tokko: status 2 = disponible. Todo lo demás (reservada, no disponible) no se publica al bot. */
+export const isAvailable = (p: TokkoProperty): boolean => p.status === 2;
+
 const OP_MAP: Record<string, Operation> = { sale: "sale", venta: "sale", rent: "rent", alquiler: "rent" };
 
 /**
@@ -50,7 +53,6 @@ export function mapTokkoProperty(p: TokkoProperty): PropertyRow {
   const tagNames = (p.tags ?? []).map((t) => (t.name ?? "").trim()).filter(Boolean);
   const lowerTags = tagNames.map((t) => t.toLowerCase());
   const petsTag = lowerTags.find((t) => t.includes("mascota"));
-  const occupiedTag = lowerTags.some((t) => t.includes("ocupad") || t.includes("inquilin") || t.includes("con renta"));
 
   const cover = p.photos?.find((ph) => ph.is_front_cover) ?? p.photos?.[0];
 
@@ -60,18 +62,20 @@ export function mapTokkoProperty(p: TokkoProperty): PropertyRow {
     operation: main?.op ?? null,
     property_type: p.type?.name ?? null,
     title: p.publication_title ?? null,
-    description: p.description ?? null,
+    description: p.description?.trim() || null,
     price: num(main?.price?.price),
     currency: main?.price?.currency ?? null,
     expenses: num(p.expenses),
     zone: p.location?.name ?? p.location?.short_location ?? null,
     // Usamos la dirección que Tokko ya publica, nunca real_address.
     address: p.fake_address || p.address || null,
-    is_occupied: occupiedTag,
+    // Las ocupadas se pasan a "no disponible" en Tokko y quedan afuera por isAvailable().
+    is_occupied: false,
     rooms: num(p.room_amount),
     bedrooms: num(p.suite_amount),
     bathrooms: num(p.bathroom_amount),
-    surface_total: num(p.total_surface),
+    // En terrenos Tokko carga los m² en `surface` (lote) y deja total_surface en 0.
+    surface_total: num(p.surface) ?? num(p.total_surface),
     surface_covered: num(p.roofed_surface),
     pets_allowed: petsTag ? !petsTag.includes("no") : null,
     amenities: tagNames,

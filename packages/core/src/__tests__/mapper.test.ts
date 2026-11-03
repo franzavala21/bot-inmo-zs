@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapTokkoProperty } from "../tokko/mapper";
+import { isAvailable, mapTokkoProperty } from "../tokko/mapper";
 
 const base = {
   id: 1, reference_code: "VDE123", publication_title: "Depto 2 amb", type: { name: "Departamento" },
@@ -24,7 +24,15 @@ describe("mapTokkoProperty", () => {
   it("detecta 'no acepta mascotas'", () => {
     expect(mapTokkoProperty({ ...base, tags: [{ name: "No acepta mascotas" }] }).pets_allowed).toBe(false);
   });
-  it("marca ocupada por tag", () => {
-    expect(mapTokkoProperty({ ...base, tags: [{ name: "Ocupado con inquilino" }] }).is_occupied).toBe(true);
+  it("solo status 2 cuenta como disponible", () => {
+    expect(isAvailable({ ...base, status: 2 })).toBe(true);
+    expect(isAvailable({ ...base, status: 3 })).toBe(false);
+    expect(isAvailable({ ...base })).toBe(false);
+  });
+  it("en terrenos usa surface (lote) cuando total_surface viene en 0", () => {
+    expect(mapTokkoProperty({ ...base, surface: "700.00", total_surface: "0.00" }).surface_total).toBe(700);
+  });
+  it("limpia espacios de la descripción", () => {
+    expect(mapTokkoProperty({ ...base, description: "   Hola\n   " }).description).toBe("Hola");
   });
 });

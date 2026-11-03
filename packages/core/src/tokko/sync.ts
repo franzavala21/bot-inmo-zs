@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { TokkoClient } from "./client";
-import { mapTokkoProperty } from "./mapper";
+import { isAvailable, mapTokkoProperty } from "./mapper";
 
 export interface SyncResult {
   fetched: number;
@@ -15,7 +15,7 @@ export async function syncTokko(db: SupabaseClient, tokkoKey: string): Promise<S
   const { data: run } = await db.from("tokko_sync_runs").insert({}).select("id").single();
   try {
     const items = await new TokkoClient(tokkoKey).listAllProperties();
-    const rows = items.map(mapTokkoProperty);
+    const rows = items.filter(isAvailable).map(mapTokkoProperty);
 
     const { data: existing, error: exErr } = await db.from("properties").select("tokko_id, status");
     if (exErr) throw exErr;
