@@ -23,7 +23,9 @@
 - [ ] Falta crear al hermano en Auth (y cargarlo en `allowed_users` y `ALLOWED_EMAILS`) y agregar `http://localhost:3001/**` a Redirect URLs.
 - [x] El cron `/api/cron/tokko-sync` probado en local con el secreto: 71 actualizadas y 0 nuevas.
 - [x] Repo: github.com/franzavala21/bot-inmo-zs (privado).
-- [ ] Deploy en Vercel con plan **Hobby**, porque por ahora no se paga. El cron quedó diario (`0 11 * * *`, 8:00 de Argentina) porque Hobby no permite más seguido. Entre corridas se usa el botón "Sincronizar". Si pasan a Pro, se vuelve a `*/30`.
+- [x] Deploy en Vercel: producción en https://bot-inmo-zs-vl7l.vercel.app, verificada el 2026-11-03. `/login` responde 200, `/propiedades` redirige al login y el cron da 401 sin secreto y 200 con secreto (71 actualizadas).
+- [ ] Borrar el proyecto duplicado `bot-inmo-zs` en Vercel, cargar la URL de producción en Supabase (Redirect URLs y Site URL), cargar `WEB_BASE_URL` y probar el login real en producción.
+- Plan **Hobby**, porque por ahora no se paga. El cron quedó diario (`0 11 * * *`, 8:00 de Argentina) porque Hobby no permite más seguido. Entre corridas se usa el botón "Sincronizar". Si pasan a Pro, se vuelve a `*/30`.
 
 ## Próximo (Fase 2)
 - `apps/wa-worker` (Baileys en Railway), `/api/inbound` con HMAC, bandeja en tiempo real y el interruptor IA/humano.
