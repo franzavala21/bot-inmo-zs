@@ -1,12 +1,13 @@
 import Link from "next/link";
 
 const NAV = [
-  { href: "/bandeja", label: "Bandeja", soon: true },
+  { href: "/bandeja", label: "Bandeja" },
   { href: "/leads", label: "A quién llamar", soon: true },
   { href: "/propiedades", label: "Propiedades" },
   { href: "/avisos", label: "Avisos", soon: true },
   { href: "/agenda", label: "Agenda", soon: true },
   { href: "/reglas", label: "Reglas", soon: true },
+  { href: "/conexion", label: "Conexión" },
 ];
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,9 @@
+**/node_modules
+**/.next
+**/.env
+**/.env.*
+!.env.example
+apps/wa-worker/auth
+apps/wa-worker/auth-*
+**/*.log
+.git

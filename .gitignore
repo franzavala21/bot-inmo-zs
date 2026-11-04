@@ -6,6 +6,7 @@ dist/
 !.env.example
 # Sesión de WhatsApp (Baileys) del worker: tiene credenciales, nunca al repo.
 apps/wa-worker/auth/
+apps/wa-worker/auth-*/
 apps/wa-worker/data/
 auth_info*/
 *.log

@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "pnpm --filter web dev",
     "worker": "pnpm --filter wa-worker dev",
-    "test": "pnpm --filter @inmo/core test",
+    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
   "packageManager": "pnpm@12.5.1"
