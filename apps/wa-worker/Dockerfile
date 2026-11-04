@@ -16,4 +16,5 @@ COPY apps/wa-worker apps/wa-worker
 ENV NODE_ENV=production
 WORKDIR /app/apps/wa-worker
 # La sesión de WhatsApp vive en el volumen de Railway (AUTH_DIR=/data/auth), no en la imagen.
-CMD ["node_modules/.bin/tsx", "src/index.ts"]
+# Un solo proceso de Node (PID 1) para que reciba el SIGTERM de Railway y marque el canal offline.
+CMD ["node", "--import", "tsx", "src/index.ts"]

@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 2 (WhatsApp de punta a punta). Sin empezar: faltan los requisitos que tienen que conseguir los dueños.
+**Fase actual:** 2 (WhatsApp de punta a punta). Código terminado y probado sin chip; falta el chip y Railway para conectarlo de verdad.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -21,12 +21,21 @@
 - **.gitignore:** una regla `auth/` ignoraba `/auth/callback` y en producción daba 404. Ahora se limita a `apps/wa-worker/auth/`. Al agregar rutas nuevas, revisar con `git status --ignored`.
 - **Local:** la web lee el `.env` de la raíz mediante el symlink `apps/web/.env`. Corre en el puerto 3001 porque el 3000 está ocupado por otro proyecto.
 
+## Fase 2: avance (2026-11-04)
+- Hecho: `apps/wa-worker` (Baileys, solo transporte), `/api/inbound` firmado con HMAC, migración `0002` (aplicada), bandeja en tiempo real, interruptor IA/humano y `/conexion` con el QR.
+- Prueba de punta a punta con `WA_TRANSPORT=fake`: `apps/wa-worker/scripts/e2e.mts` (13 chequeos, todos OK). Correr con la web en `localhost:3001` y el worker en modo fake:
+  `cd apps/wa-worker && node_modules/.bin/tsx --env-file=../../.env scripts/e2e.mts`
+- Contacto de prueba: teléfono `5490000000001`, `is_test=true`. No borrarlo sin pedirlo.
+- Aprendizaje: `node_modules/.bin/tsx` es un script de `sh` y no pasa bien el SIGTERM. El worker se arranca con `node --import tsx src/index.ts` (un solo proceso), así se apaga ordenado y deja el canal "offline". Verificado en Docker.
+
+### Falta para cerrar la Fase 2
+- [ ] `INBOUND_HMAC_SECRET` en Vercel (el mismo valor del `.env` local) y redeploy.
+- [ ] Chip aparte + cuenta en Railway. Deploy del worker: raíz del repo, config `apps/wa-worker/railway.json`, volumen en `/data`. Variables: `NEXT_PUBLIC_SUPABASE_URL` (o `SUPABASE_URL`), `SUPABASE_SERVICE_ROLE_KEY`, `WEB_BASE_URL` (la URL de Vercel), `INBOUND_HMAC_SECRET`, `AUTH_DIR=/data/auth`, `CHANNEL_SLUG=ventas`.
+- [ ] Escanear el QR desde `/conexion` y probar con un teléfono real: mensaje entrante, respuesta desde el panel y respuesta desde el teléfono del chip.
+
 ## Pendientes sueltos
 - [ ] Hermano: crearlo en Auth y cargarlo en `allowed_users`, en `ALLOWED_EMAILS` (local y Vercel) y en Redirect URLs si va a usar local.
 - [ ] Borrar el proyecto duplicado `bot-inmo-zs` en Vercel, si todavía existe.
 
-## Próximo (Fase 2): requisitos de los dueños
-- Chip aparte para WhatsApp. **Nunca** el número principal de la inmobiliaria.
-- Cuenta en Railway (worker de Baileys con volumen para la sesión).
-- `INBOUND_HMAC_SECRET` (`openssl rand -hex 32`) en `.env`, Vercel y Railway.
-- Construir: `apps/wa-worker`, `/api/inbound` con HMAC, bandeja en tiempo real y el interruptor IA/humano (F-05 a F-07).
+## Próximo (Fase 3)
+- Pipeline del bot: clasificador, búsqueda en `properties_public`, redactor y verificador. Se engancha en `/api/inbound` (está marcado el lugar).
