@@ -25,7 +25,7 @@ async function main() {
 
   const transport: Transport = config.transport === "fake" ? new FakeTransport() : new BaileysTransport();
   const status = new ChannelStatus(db, channel.id);
-  const dispatcher = new Dispatcher(db, transport, channel.id);
+  const dispatcher = new Dispatcher(db, transport, channel.id, config.transport !== "fake");
 
   async function onMessage(msg: WAMessage) {
     const m = extract(msg);

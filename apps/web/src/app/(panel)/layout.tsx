@@ -6,6 +6,7 @@ const NAV = [
   { href: "/propiedades", label: "Propiedades" },
   { href: "/avisos", label: "Avisos", soon: true },
   { href: "/agenda", label: "Agenda", soon: true },
+  { href: "/negocio", label: "Info del negocio" },
   { href: "/reglas", label: "Reglas", soon: true },
   { href: "/conexion", label: "Conexión" },
 ];

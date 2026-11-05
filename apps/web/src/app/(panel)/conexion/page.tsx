@@ -3,11 +3,12 @@ import { serverClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { phonePretty, timeAgo } from "@/lib/format";
 import { STATE_UI, workerState } from "./worker-badge";
+import { BotToggle } from "./bot-toggle";
 
 export default async function Conexion() {
   const sb = await serverClient();
   const { data: channels } = await sb.from("channels")
-    .select("id, slug, name, phone, active, transport, worker_status, worker_qr, worker_heartbeat_at").order("created_at");
+    .select("id, slug, name, phone, active, transport, worker_status, worker_qr, worker_heartbeat_at, bot_enabled").order("created_at");
   const rows = await Promise.all((channels ?? []).map(async (c) => {
     const s = workerState(c);
     const qrSvg = s === "qr" && c.worker_qr ? await QRCode.toString(c.worker_qr, { type: "svg", margin: 1 }) : null;
@@ -31,6 +32,7 @@ export default async function Conexion() {
               <span className={`rounded-full border px-3 py-1 text-xs ${STATE_UI[s].cls}`}>{STATE_UI[s].label}</span>
             </div>
             <p className="text-xs text-zinc-500">Último latido del worker: {timeAgo(c.worker_heartbeat_at)}</p>
+            <BotToggle channelId={c.id} enabled={!!c.bot_enabled} />
             {qrSvg && (
               <div className="space-y-2">
                 <div className="mx-auto w-64 max-w-full" dangerouslySetInnerHTML={{ __html: qrSvg }} />

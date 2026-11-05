@@ -7,6 +7,7 @@ export interface SearchFilters {
   propertyType?: string;
   zone?: string;
   roomsMin?: number;
+  bedroomsMin?: number;
   priceMax?: number;
   currency?: string;
   pets?: boolean;
@@ -46,8 +47,10 @@ export async function searchProperties(db: SupabaseClient, f: SearchFilters) {
   let q = db.from("properties_public").select(PUBLIC_COLUMNS).limit(f.limit ?? 4);
   if (f.operation) q = q.eq("operation", f.operation);
   if (f.propertyType) q = q.ilike("property_type", `%${f.propertyType}%`);
-  if (f.zone) q = q.ilike("zone", `%${f.zone}%`);
+  // En la base las zonas están sin acentos ("Rio Ceballos"): se compara sin acentos.
+  if (f.zone) q = q.ilike("zone", `%${f.zone.normalize("NFD").replace(/[\u0300-\u036f]/g, "")}%`);
   if (f.roomsMin) q = q.gte("rooms", f.roomsMin);
+  if (f.bedroomsMin) q = q.gte("bedrooms", f.bedroomsMin);
   if (f.priceMax) q = q.lte("price", f.priceMax);
   if (f.currency) q = q.eq("currency", f.currency);
   if (f.pets === true) q = q.or("pets_allowed.is.null,pets_allowed.eq.true");

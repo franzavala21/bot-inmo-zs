@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 3 (pipeline del bot). La Fase 2 se cerró el 2026-11-05.
+**Fase actual:** 3 (pipeline del bot). Código armado; falta aplicar `0003`, cargar `OPENAI_API_KEY` y probar con el modelo real.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -37,5 +37,17 @@
 - [ ] Hermano: crearlo en Auth y cargarlo en `allowed_users`, en `ALLOWED_EMAILS` (local y Vercel) y en Redirect URLs si va a usar local.
 - [ ] Borrar el proyecto duplicado `bot-inmo-zs` en Vercel, si todavía existe.
 
-## Próximo (Fase 3)
-- Pipeline del bot: clasificador, búsqueda en `properties_public`, redactor y verificador. Se engancha en `/api/inbound` (está marcado el lugar).
+## Fase 3: avance (2026-11-05)
+- Código en `packages/core/src/bot/`: `orchestrator.ts` (código: camino, búsqueda con ampliación, reintento, derivación), `agents.ts` (clasificador, redactor y verificador con zod), `numeric.ts` (control numérico y de links), `run-turn.ts` (frenos de gasto y por hora, transcripción, `bot_commit`), `transcribe.ts`, `llm.ts` (OpenAI + precios para el tope).
+- Migración `0003_bot.sql` (SIN aplicar): `channels.bot_enabled` (arranca apagado), `business_info`, `claim_bot_turn`, `bot_commit` (traza + envío + derivación en una transacción), `set_bot_enabled`.
+- `/api/inbound` corre el turno con `after()` tras 7 s de espera (se juntan mensajes seguidos). `maxDuration = 60`.
+- Panel: interruptor del bot en `/conexion`, `/negocio` (info del negocio editable) y bitácora plegable en cada chat.
+- Worker: nunca envía por WhatsApp real a contactos `is_test` (los marca como fallidos).
+- Prueba sin escribir en la base: `cd packages/core && node_modules/.bin/tsx --env-file=../../.env scripts/bot-try.ts [caso]`.
+- Decisión: la moneda de las expensas no viene de Tokko; el bot muestra el número con "(moneda sin dato)" y, si preguntan, deriva.
+
+### Falta para cerrar la Fase 3
+- [ ] Aplicar `0003_bot.sql`.
+- [ ] `OPENAI_API_KEY` en `.env` y en Vercel (más `OPENAI_TEXT_MODEL`, `OPENAI_TRANSCRIBE_MODEL` y `DAILY_SPEND_CAP_USD`). Poner también un límite de gasto en la cuenta de OpenAI.
+- [ ] Correr `bot-try.ts` y ajustar los prompts con lo que salga.
+- [ ] Cargar `/negocio`, prender el bot y probar desde un teléfono personal.

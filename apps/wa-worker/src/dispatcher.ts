@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { log } from "./log";
 import type { Transport } from "./transport";
 
-type Outbound = { id: string; to_phone: string; body: string; attempts: number };
+type Outbound = { id: string; conversation_id: string; to_phone: string; body: string; attempts: number };
 
 /**
  * Despacha outbound_messages del canal: humano primero, de a uno y a ritmo humano.
@@ -15,7 +15,13 @@ export class Dispatcher {
   /** Ids de WhatsApp que mandamos nosotros: su eco en messages.upsert no se reenvía a la web. */
   readonly sentIds = new Set<string>();
 
-  constructor(private db: SupabaseClient, private transport: Transport, private channelId: string) {}
+  constructor(private db: SupabaseClient, private transport: Transport, private channelId: string, private realTransport = true) {}
+
+  /** Contactos de prueba (is_test): nunca se les manda un WhatsApp real. */
+  private async isTestContact(conversationId: string): Promise<boolean> {
+    const { data } = await this.db.from("conversations").select("contact:contacts(is_test)").eq("id", conversationId).maybeSingle();
+    return !!(data?.contact as unknown as { is_test: boolean } | null)?.is_test;
+  }
 
   async start() {
     const { data: n, error } = await this.db.rpc("fail_interrupted_outbound", { p_channel_id: this.channelId });
@@ -57,6 +63,12 @@ export class Dispatcher {
   }
 
   private async send(job: Outbound) {
+    if (this.realTransport && (await this.isTestContact(job.conversation_id))) {
+      log.warn("envío a contacto de prueba bloqueado", { outbound_id: job.id });
+      await this.db.rpc("mark_outbound_result", { p_outbound_id: job.id, p_ok: false, p_wa_message_id: null,
+        p_error: "contacto de prueba: no se envía por WhatsApp real", p_max_attempts: 0 });
+      return;
+    }
     const to = job.to_phone.includes("@") ? job.to_phone : `${job.to_phone.replace(/\D/g, "")}@s.whatsapp.net`;
     try {
       const waId = await this.transport.sendText(to, job.body);

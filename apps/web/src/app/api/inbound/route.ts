@@ -1,5 +1,10 @@
-import { NextResponse } from "next/server";
-import { adminClient, InboundPayload, verify, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@inmo/core";
+import { after, NextResponse } from "next/server";
+import { adminClient, InboundPayload, runBotTurn, verify, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@inmo/core";
+
+// El turno del bot corre después de responder al worker (after). Tope por si el modelo tarda.
+export const maxDuration = 60;
+// Espera antes de responder: la gente manda varios mensajes seguidos y se contestan juntos.
+const DEBOUNCE_MS = 7_000;
 
 // Recibe del worker (Railway) cada mensaje de WhatsApp. Público en el middleware: lo protege la firma HMAC.
 // Privacidad: en los logs va solo el id de conversación, nunca teléfono ni texto.
@@ -31,6 +36,18 @@ export async function POST(req: Request) {
   }
   const r = data as { conversation_id: string; message_id: string | null; duplicate: boolean };
   console.log("[inbound] ok conv=%s dup=%s", r.conversation_id, r.duplicate);
-  // Fase 3: si no es duplicado, no es from_me y la conversación está en modo IA → pipeline del bot.
+  // Bot: solo mensajes nuevos del cliente. claim_bot_turn decide si corresponde (bot prendido, modo IA, último mensaje).
+  if (!r.duplicate && !p.from_me && r.message_id) {
+    const messageId = r.message_id;
+    after(async () => {
+      await new Promise((res) => setTimeout(res, DEBOUNCE_MS));
+      try {
+        const result = await runBotTurn(adminClient(), r.conversation_id, messageId);
+        console.log("[bot] conv=%s resultado=%s", r.conversation_id, result);
+      } catch (e) {
+        console.error("[bot] conv=%s falló: %s", r.conversation_id, (e as Error).message);
+      }
+    });
+  }
   return NextResponse.json(r);
 }

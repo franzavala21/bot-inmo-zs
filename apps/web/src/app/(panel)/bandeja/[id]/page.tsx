@@ -12,6 +12,24 @@ type Msg = {
   transcript: string | null; created_at: string; outbound_messages: { status: string; error: string | null }[];
 };
 
+const EVENT_CLS: Record<string, string> = {
+  handoff: "text-red-700 font-medium", sent_handoff: "text-red-700", rejected_numeric: "text-amber-700",
+  rejected_verifier: "text-amber-700", agent_error: "text-red-700", send_failed: "text-red-700", limit: "text-red-700",
+  sent: "text-emerald-700", discarded: "text-zinc-500",
+};
+
+/** Un detalle corto y legible de cada evento (sin datos personales). */
+function auditDetail(event: string, d: unknown): string | null {
+  const x = (d ?? {}) as Record<string, unknown>;
+  if (event === "classified" && typeof x.confidence === "number") return `confianza ${Math.round(x.confidence * 100)}%`;
+  if (event === "searched" && Array.isArray(x.codes)) return x.codes.length ? (x.codes as string[]).join(", ") : null;
+  if (event === "rejected_numeric") return [...((x.numbers as number[]) ?? []), ...((x.urls as string[]) ?? [])].join(", ") || null;
+  if (event === "rejected_verifier" && Array.isArray(x.problems)) return (x.problems as string[]).join(" / ");
+  if ((event === "sent" || event === "sent_handoff") && Array.isArray(x.property_codes) && x.property_codes.length) return (x.property_codes as string[]).join(", ");
+  if (event === "agent_error" && typeof x.error === "string") return x.error;
+  return null;
+}
+
 const STATUS_LABEL: Record<string, string> = { pending: "En cola", sending: "Enviando…", sent: "Enviado", failed: "No salió" };
 
 export default async function Chat({ params }: { params: Promise<{ id: string }> }) {
@@ -23,7 +41,10 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
       .eq("conversation_id", id).order("created_at", { ascending: false }).limit(200),
   ]);
   if (!conv) notFound();
-  const { data: channel } = await sb.from("channels").select("worker_status, worker_heartbeat_at").eq("id", conv.channel_id).maybeSingle();
+  const [{ data: channel }, { data: audit }] = await Promise.all([
+    sb.from("channels").select("worker_status, worker_heartbeat_at, bot_enabled").eq("id", conv.channel_id).maybeSingle(),
+    sb.from("audit_log").select("id, event, summary, details, created_at").eq("conversation_id", id).order("created_at", { ascending: false }).limit(80),
+  ]);
   const online = channel?.worker_status === "online" &&
     !!channel.worker_heartbeat_at && Date.now() - new Date(channel.worker_heartbeat_at).getTime() < 120_000;
 
@@ -51,6 +72,21 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
       {conv.needs_attention && (
         <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{conv.attention_reason ?? "Necesita atención"}</div>
       )}
+      {conv.mode === "ai" && channel && !channel.bot_enabled && (
+        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">El bot está apagado: este chat no recibe respuestas automáticas.</div>
+      )}
+      <details className="border-b border-zinc-200 bg-white px-3 py-2 text-sm">
+        <summary className="cursor-pointer text-zinc-600">Bitácora ({audit?.length ?? 0})</summary>
+        <ol className="mt-2 max-h-64 space-y-1 overflow-y-auto text-xs">
+          {(audit ?? []).map((a) => (
+            <li key={a.id} className="flex gap-2">
+              <span className="shrink-0 text-zinc-400">{timeShort(a.created_at)}</span>
+              <span className={EVENT_CLS[a.event] ?? "text-zinc-700"}>{a.summary}</span>
+              {auditDetail(a.event, a.details) && <span className="text-zinc-400">· {auditDetail(a.event, a.details)}</span>}
+            </li>
+          ))}
+        </ol>
+      </details>
       <ol className="flex-1 space-y-2 overflow-y-auto p-3">
         {messages.map((m) => {
           const mine = m.author !== "client";
