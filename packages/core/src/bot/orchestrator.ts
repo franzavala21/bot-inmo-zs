@@ -20,6 +20,16 @@ export const PHRASES = {
 } as const;
 
 const MIN_CONFIDENCE = 0.5;
+
+// Si la respuesta dice que sigue una persona o que al bot le falta un dato, el turno se deriva
+// aunque el redactor no lo haya marcado: lo que se le dice al cliente tiene que pasar de verdad.
+const PROMISES_HUMAN = /(persona|alguien|uno|una) del equipo|(asesor|vendedor|agente)\b.*\b(contact|llam|escrib|respond|pasa)|consult(o|amos|ar[ée]) con el equipo|te (contacta|llama|escribe) (un|una|alguien)/i;
+const LACKS_DATA = /\bno (tengo|cuento con|dispongo de)\b.{0,25}\b(informaci[oó]n|dato|datos|detalle)/i;
+export function impliesHandoff(reply: string): string | null {
+  if (PROMISES_HUMAN.test(reply)) return "La respuesta le dice al cliente que sigue una persona del equipo";
+  if (LACKS_DATA.test(reply)) return "El cliente pidió un dato que el bot no tiene";
+  return null;
+}
 const MAX_RESULTS = 3;
 
 /** Mensajes del cliente desde la última respuesta (del bot o del equipo): lo que hay que contestar. */
@@ -116,7 +126,11 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       properties = input.recentlyShown.slice(0, MAX_RESULTS);
       searchNote = "Son las fichas que el bot ya mostró en este chat.";
     }
-    if (!properties.length && c.intent === "busqueda") {
+    const f = c.filters;
+    const hasCriteria = !!(f.property_type || f.zone || f.rooms_min || f.bedrooms_min || f.price_max || f.keywords || f.pets);
+    if (!properties.length && c.intent === "busqueda" && !hasCriteria) {
+      searchNote = "El cliente todavía no dio ningún criterio: no se buscó. Preguntale qué tipo de propiedad y en qué zona.";
+    } else if (!properties.length && c.intent === "busqueda") {
       for (const step of searchPlan(c, input.channelOperation)) {
         const rows = await deps.search(step.filters);
         if (rows.length) { properties = rows.map(toFact); searchNote = step.note; break; }
@@ -168,16 +182,26 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       trace.push({ event: "agent_error", summary: "El verificador falló", details: { error: (e as Error).message.slice(0, 200) } });
       return handoff("El bot no pudo verificar su respuesta");
     }
-    if (!v.ok) {
-      trace.push({ event: "rejected_verifier", summary: "El verificador rechazó la respuesta", details: { attempt, problems: v.problems.slice(0, 5) } });
-      feedback = v.problems.slice(0, 5);
+    // Solo cuentan las citas que de verdad están en la respuesta (el verificador a veces cita al cliente).
+    const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/["«»“”]/g, "").replace(/\s+/g, " ").trim();
+    const replyNorm = norm(reply);
+    const violations = v.violations
+      .filter((x) => { const q = norm(x.quote); return q.length >= 3 && replyNorm.includes(q); })
+      .map((x) => `${x.rule}: «${x.quote.trim()}»`);
+    const ignored = v.violations.length - violations.length;
+    if (ignored) trace.push({ event: "verifier_ignored", summary: `El verificador citó ${ignored} fragmento(s) que no están en la respuesta: se ignoran`, details: { attempt, ignored: v.violations.slice(0, 5) } });
+    if (violations.length) {
+      trace.push({ event: "rejected_verifier", summary: "El verificador rechazó la respuesta", details: { attempt, problems: violations.slice(0, 5) } });
+      feedback = violations.slice(0, 5);
       continue;
     }
     trace.push({ event: "verified", summary: "Respuesta verificada", details: { attempt } });
 
     const codes = d.property_codes_used.filter((code) => properties.some((p) => p.codigo === code));
-    if (d.needs_human || unreadable.length) {
-      return handoff(d.human_reason?.trim() || (unreadable.length ? "Mandó algo que el bot no puede leer" : "El bot necesita a una persona"), reply, codes);
+    const implied = impliesHandoff(reply);
+    if (d.needs_human || unreadable.length || implied) {
+      if (implied && !d.needs_human) trace.push({ event: "handoff_forced", summary: `Se deriva por control de código: ${implied}` });
+      return handoff(d.human_reason?.trim() || implied || (unreadable.length ? "Mandó algo que el bot no puede leer" : "El bot necesita a una persona"), reply, codes);
     }
     return { action: "reply", body: reply, propertyCodes: codes, trace, usage };
   }

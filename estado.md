@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 3 (pipeline del bot). Código armado; falta aplicar `0003`, cargar `OPENAI_API_KEY` y probar con el modelo real.
+**Fase actual:** 3 (pipeline del bot). `0003` aplicada; 13 casos con el modelo real OK. Bot APAGADO hasta que carguen `/negocio` y lo prueben.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -44,10 +44,17 @@
 - Panel: interruptor del bot en `/conexion`, `/negocio` (info del negocio editable) y bitácora plegable en cada chat.
 - Worker: nunca envía por WhatsApp real a contactos `is_test` (los marca como fallidos).
 - Prueba sin escribir en la base: `cd packages/core && node_modules/.bin/tsx --env-file=../../.env scripts/bot-try.ts [caso]`.
+- Ajustes tras probar con el modelo real (2026-11-05):
+  - El redactor marcaba "necesita persona" al ofrecer el contacto: ahora solo con dato faltante, visita/negociación o tema delicado.
+  - Verificador: devuelve solo violaciones `{rule, quote}`; el código descarta citas que no están en la respuesta (citaba al cliente) y aprueba si no queda ninguna.
+  - Control en código: si la respuesta dice que sigue "una persona del equipo" o "no tengo información", se deriva aunque el redactor no lo marque.
+  - Reglas nuevas: no prometer escribir después (mensajes proactivos), no afirmar cercanía entre zonas, no dar calles.
+- Decisión: proveedor OpenAI (gpt-4.1-mini + gpt-4o-mini-transcribe). Se evaluó Anthropic: Claude no transcribe audio; el cambio queda fácil por la interfaz `Llm`.
 - Decisión: la moneda de las expensas no viene de Tokko; el bot muestra el número con "(moneda sin dato)" y, si preguntan, deriva.
 
 ### Falta para cerrar la Fase 3
-- [ ] Aplicar `0003_bot.sql`.
-- [ ] `OPENAI_API_KEY` en `.env` y en Vercel (más `OPENAI_TEXT_MODEL`, `OPENAI_TRANSCRIBE_MODEL` y `DAILY_SPEND_CAP_USD`). Poner también un límite de gasto en la cuenta de OpenAI.
-- [ ] Correr `bot-try.ts` y ajustar los prompts con lo que salga.
+- [x] Aplicar `0003_bot.sql`.
+- [x] `OPENAI_API_KEY` en `.env` local.
+- [ ] `OPENAI_API_KEY`, `OPENAI_TEXT_MODEL`, `OPENAI_TRANSCRIBE_MODEL` y `DAILY_SPEND_CAP_USD` en Vercel. Límite de gasto en la cuenta de OpenAI.
+- [x] `bot-try.ts`: 13 casos OK (USD ~0,018 la corrida completa, ~USD 0,001–0,004 por respuesta).
 - [ ] Cargar `/negocio`, prender el bot y probar desde un teléfono personal.

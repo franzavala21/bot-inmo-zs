@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { checkNumbers, extractNumbers } from "../bot/numeric";
-import { decide, PHRASES, pendingTurn, searchPlan, type OrchestratorDeps } from "../bot/orchestrator";
+import { decide, impliesHandoff, PHRASES, pendingTurn, searchPlan, type OrchestratorDeps } from "../bot/orchestrator";
 import { toFact, type PublicRow } from "../bot/facts";
 import type { Llm } from "../bot/llm";
 import type { Classification } from "../bot/agents";
@@ -82,7 +82,7 @@ describe("orquestador", () => {
   });
 
   it("camino feliz: clasifica, busca, redacta, controla y verifica", async () => {
-    const llm = fakeLlm({ clasificacion: [cls()], respuesta: [goodReply], verificacion: [{ ok: true, problems: [] }] });
+    const llm = fakeLlm({ clasificacion: [cls()], respuesta: [goodReply], verificacion: [{ violations: [] }] });
     const d = await decide(input([msg("Hola, busco casa en Salsipuedes")]), deps(llm));
     expect(d.action).toBe("reply");
     if (d.action === "reply") { expect(d.body).toContain("59.000"); expect(d.propertyCodes).toEqual(["ZHO1"]); }
@@ -113,7 +113,7 @@ describe("orquestador", () => {
     const llm = fakeLlm({
       clasificacion: [cls()],
       respuesta: [{ ...goodReply, reply: "Tengo una casa a USD 55.000" }, goodReply],
-      verificacion: [{ ok: true, problems: [] }],
+      verificacion: [{ violations: [] }],
     });
     const d = await decide(input([msg("busco casa en Salsipuedes")]), deps(llm));
     expect(d.action).toBe("reply");
@@ -125,18 +125,44 @@ describe("orquestador", () => {
     const llm = fakeLlm({
       clasificacion: [cls()],
       respuesta: [goodReply, goodReply],
-      verificacion: [{ ok: false, problems: ["confirma una visita"] }, { ok: false, problems: ["confirma una visita"] }],
+      verificacion: [{ violations: [{ rule: "compromiso", quote: "Tengo una casa en Salsipuedes" }] }, { violations: [{ rule: "compromiso", quote: "Tengo una casa en Salsipuedes" }] }],
     });
     const d = await decide(input([msg("busco casa")]), deps(llm));
     expect(d.action).toBe("handoff");
     if (d.action === "handoff") expect(d.body).toBe(PHRASES.generic);
   });
 
+  it("ignora violaciones que citan algo que no está en la respuesta (ej. al cliente)", async () => {
+    const llm = fakeLlm({
+      clasificacion: [cls()],
+      respuesta: [goodReply],
+      verificacion: [{ violations: [{ rule: "direccion_exacta", quote: "cuál es la dirección exacta" }] }],
+    });
+    const d = await decide(input([msg("busco casa, cuál es la dirección exacta")]), deps(llm));
+    expect(d.action).toBe("reply");
+    expect(d.trace.some((t) => t.event === "verifier_ignored")).toBe(true);
+  });
+
+  it("si la respuesta promete una persona o admite que falta un dato, deriva aunque el redactor no lo marque", async () => {
+    expect(impliesHandoff("La ubicación precisa te la pasa una persona del equipo.")).not.toBeNull();
+    expect(impliesHandoff("No tengo información sobre expensas.")).not.toBeNull();
+    expect(impliesHandoff("Lo consulto con el equipo y te responden.")).not.toBeNull();
+    expect(impliesHandoff("Tengo dos casas en Salsipuedes. ¿Te interesa alguna?")).toBeNull();
+    const llm = fakeLlm({
+      clasificacion: [cls({ intent: "consulta_propiedad", property_code: "ZHO1" })],
+      respuesta: [{ reply: "No tengo información sobre expensas. ¿Querés ver otras?", property_codes_used: [], needs_human: false, human_reason: null }],
+      verificacion: [{ violations: [] }],
+    });
+    const d = await decide(input([msg("¿expensas de la ZHO1?")]), deps(llm));
+    expect(d.action).toBe("handoff");
+    expect(d.trace.some((t) => t.event === "handoff_forced")).toBe(true);
+  });
+
   it("si el redactor pide una persona, se manda su respuesta verificada y se deriva", async () => {
     const llm = fakeLlm({
       clasificacion: [cls({ intent: "consulta_propiedad", property_code: "ZHO1" })],
       respuesta: [{ reply: "Eso lo consulto con el equipo y te escriben.", property_codes_used: [], needs_human: true, human_reason: "Pregunta por expensas" }],
-      verificacion: [{ ok: true, problems: [] }],
+      verificacion: [{ violations: [] }],
     });
     const d = await decide(input([msg("¿cuánto paga de expensas la ZHO1?")]), deps(llm));
     expect(d.action).toBe("handoff");
@@ -150,6 +176,18 @@ describe("orquestador", () => {
     expect(d.action).toBe("handoff");
     if (d.action === "handoff") expect(d.body).toBe(PHRASES.media);
     expect(llm.calls).toEqual([]);
+  });
+
+  it("sin ningún criterio no busca: pregunta", async () => {
+    let searched = false;
+    const llm = fakeLlm({
+      clasificacion: [cls({ filters: { ...cls().filters, property_type: null, zone: null } })],
+      respuesta: [{ reply: "¿Qué tipo de propiedad buscás y en qué zona?", property_codes_used: [], needs_human: false, human_reason: null }],
+      verificacion: [{ violations: [] }],
+    });
+    const d = await decide(input([msg("quiero comprar algo")]), { ...deps(llm), search: async () => { searched = true; return [ROW]; } });
+    expect(d.action).toBe("reply");
+    expect(searched).toBe(false);
   });
 
   it("sin resultados exactos amplía la búsqueda paso a paso", async () => {
