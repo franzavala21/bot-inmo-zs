@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 2 (WhatsApp de punta a punta). Código terminado y probado sin chip; falta el chip y Railway para conectarlo de verdad.
+**Fase actual:** 3 (pipeline del bot). La Fase 2 se cerró el 2026-11-05.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -28,10 +28,10 @@
 - Contacto de prueba: teléfono `5490000000001`, `is_test=true`. No borrarlo sin pedirlo.
 - Aprendizaje: `node_modules/.bin/tsx` es un script de `sh` y no pasa bien el SIGTERM. El worker se arranca con `node --import tsx src/index.ts` (un solo proceso), así se apaga ordenado y deja el canal "offline". Verificado en Docker.
 
-### Falta para cerrar la Fase 2
-- [ ] `INBOUND_HMAC_SECRET` en Vercel (el mismo valor del `.env` local) y redeploy.
-- [ ] Chip aparte + cuenta en Railway. Deploy del worker: raíz del repo, config `apps/wa-worker/railway.json`, volumen en `/data`. Variables: `NEXT_PUBLIC_SUPABASE_URL` (o `SUPABASE_URL`), `SUPABASE_SERVICE_ROLE_KEY`, `WEB_BASE_URL` (la URL de Vercel), `INBOUND_HMAC_SECRET`, `AUTH_DIR=/data/auth`, `CHANNEL_SLUG=ventas`.
-- [ ] Escanear el QR desde `/conexion` y probar con un teléfono real: mensaje entrante, respuesta desde el panel y respuesta desde el teléfono del chip.
+### Cierre de la Fase 2 (2026-11-05)
+- Worker en Railway (config `apps/wa-worker/railway.json`, volumen `/data`, `AUTH_DIR=/data/auth`). Chip vinculado (termina en 5304). `INBOUND_HMAC_SECRET` cargado en Vercel y en Railway.
+- Prueba real OK: mensaje entrante, respuesta desde el panel (enviada, sin duplicar el eco), respuesta desde el teléfono del chip (`outbound_phone`) y audio guardado y descargable.
+- Diagnóstico sin datos personales: `cd apps/wa-worker && node_modules/.bin/tsx --env-file=../../.env scripts/check-real.mts` (conversaciones de la última hora: tipos, estados y audit, sin teléfonos ni textos).
 
 ## Pendientes sueltos
 - [ ] Hermano: crearlo en Auth y cargarlo en `allowed_users`, en `ALLOWED_EMAILS` (local y Vercel) y en Redirect URLs si va a usar local.
