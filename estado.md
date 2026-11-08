@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 3 (pipeline del bot). `0003` aplicada; 13 casos con el modelo real OK. Bot APAGADO hasta que carguen `/negocio` y lo prueben.
+**Fase actual:** 3 (pipeline del bot). Primera prueba real por WhatsApp OK (2026-11-08). Falta probar audio y visita desde el teléfono. Bot APAGADO.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -55,6 +55,16 @@
 ### Falta para cerrar la Fase 3
 - [x] Aplicar `0003_bot.sql`.
 - [x] `OPENAI_API_KEY` en `.env` local.
-- [ ] `OPENAI_API_KEY`, `OPENAI_TEXT_MODEL`, `OPENAI_TRANSCRIBE_MODEL` y `DAILY_SPEND_CAP_USD` en Vercel. Límite de gasto en la cuenta de OpenAI.
+- [x] Variables de OpenAI en Vercel (el turno real corrió en producción). Límite de gasto en la cuenta de OpenAI: confirmar.
 - [x] `bot-try.ts`: 13 casos OK (USD ~0,018 la corrida completa, ~USD 0,001–0,004 por respuesta).
-- [ ] Cargar `/negocio`, prender el bot y probar desde un teléfono personal.
+- [x] `/negocio` cargado (falta `requisitos_compra`, que queda vacío: si preguntan, deriva).
+- [x] Prueba real 2026-11-08: 2 mensajes y 2 respuestas enviadas, bitácora completa, costo USD 0,005. Después apagaron el bot.
+- [ ] Probar desde el teléfono un audio y un pedido de visita.
+
+### Ajuste tras la prueba real (2026-11-08)
+- El verificador rechazaba "El precio es ARS 550.000" de un alquiler porque no decía si era mensual. Tokko no trae el período. Se reprodujo 3 de 3.
+  - Ahora los números los controla el código; el verificador solo marca un número si DATOS dice otro valor para el mismo dato.
+  - El redactor no menciona campos "sin dato" (ej. mascotas) ni agrega aclaraciones que DATOS no tiene.
+  - Una "dirección exacta" sin número ni palabra de calle (un barrio) se descarta en código (`looksLikeAddress`).
+  - Repetido 6 veces: 5 respuestas y 1 derivación por el control de código (ofreció "alguien del equipo"). Los 13 casos de `bot-try` siguen OK.
+- Para decidir: el canal de ventas hoy también muestra alquileres si el cliente los pide (hay 4 en Tokko).

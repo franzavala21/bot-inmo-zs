@@ -25,6 +25,12 @@ const MIN_CONFIDENCE = 0.5;
 // aunque el redactor no lo haya marcado: lo que se le dice al cliente tiene que pasar de verdad.
 const PROMISES_HUMAN = /(persona|alguien|uno|una) del equipo|(asesor|vendedor|agente)\b.*\b(contact|llam|escrib|respond|pasa)|consult(o|amos|ar[ée]) con el equipo|te (contacta|llama|escribe) (un|una|alguien)/i;
 const LACKS_DATA = /\bno (tengo|cuento con|dispongo de)\b.{0,25}\b(informaci[oó]n|dato|datos|detalle)/i;
+const STREET_WORDS = /\b(calle|av|avda|avenida|ruta|esquina|pasaje|psje|bv|bulevar|boulevard|diagonal|camino|sobre|entre|al)\b|n[°º]|\bkm\b/;
+export function looksLikeAddress(quote: string): boolean {
+  const q = quote.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /\d/.test(q) || STREET_WORDS.test(q);
+}
+
 export function impliesHandoff(reply: string): string | null {
   if (PROMISES_HUMAN.test(reply)) return "La respuesta le dice al cliente que sigue una persona del equipo";
   if (LACKS_DATA.test(reply)) return "El cliente pidió un dato que el bot no tiene";
@@ -187,6 +193,8 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
     const replyNorm = norm(reply);
     const violations = v.violations
       .filter((x) => { const q = norm(x.quote); return q.length >= 3 && replyNorm.includes(q); })
+      // Una "dirección" sin número ni palabra de calle es una zona o un barrio: eso se puede decir.
+      .filter((x) => x.rule !== "direccion_exacta" || looksLikeAddress(x.quote))
       .map((x) => `${x.rule}: «${x.quote.trim()}»`);
     const ignored = v.violations.length - violations.length;
     if (ignored) trace.push({ event: "verifier_ignored", summary: `El verificador citó ${ignored} fragmento(s) que no están en la respuesta: se ignoran`, details: { attempt, ignored: v.violations.slice(0, 5) } });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { checkNumbers, extractNumbers } from "../bot/numeric";
-import { decide, impliesHandoff, PHRASES, pendingTurn, searchPlan, type OrchestratorDeps } from "../bot/orchestrator";
+import { decide, impliesHandoff, looksLikeAddress, PHRASES, pendingTurn, searchPlan, type OrchestratorDeps } from "../bot/orchestrator";
 import { toFact, type PublicRow } from "../bot/facts";
 import type { Llm } from "../bot/llm";
 import type { Classification } from "../bot/agents";
@@ -200,5 +200,15 @@ describe("orquestador", () => {
   it("la ficha nunca lleva dirección", () => {
     expect(Object.keys(toFact(ROW))).not.toContain("address");
     expect(JSON.stringify(toFact({ ...ROW, ...{ address: "Santa Rosa 123" } } as PublicRow))).not.toContain("Santa Rosa 123");
+  });
+});
+
+describe("looksLikeAddress", () => {
+  it("un barrio no es una dirección; una calle o un número sí", () => {
+    expect(looksLikeAddress("Está en el barrio Villa Sol")).toBe(false);
+    expect(looksLikeAddress("en Salsipuedes")).toBe(false);
+    expect(looksLikeAddress("Belgrano 450")).toBe(true);
+    expect(looksLikeAddress("sobre la calle Los Álamos")).toBe(true);
+    expect(looksLikeAddress("Av. San Martín")).toBe(true);
   });
 });
