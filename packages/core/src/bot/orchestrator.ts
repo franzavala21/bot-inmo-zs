@@ -17,6 +17,10 @@ export interface OrchestratorDeps {
 export const PHRASES = {
   generic: "Gracias por escribir. Le paso tu consulta a alguien del equipo, que te va a responder a la brevedad.",
   media: "¡Gracias! Le paso esto a alguien del equipo para que lo vea y te responda.",
+  otherOperation: {
+    rent: "Los alquileres los atiende otra persona del equipo. Le paso tu consulta para que te responda a la brevedad.",
+    sale: "Las ventas las atiende otra persona del equipo. Le paso tu consulta para que te responda a la brevedad.",
+  },
 } as const;
 
 const MIN_CONFIDENCE = 0.5;
@@ -50,7 +54,7 @@ export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { fil
   const f = c.filters;
   const type = f.property_type ? normalize(f.property_type) : undefined;
   const base: SearchFilters = {
-    operation: f.operation ?? channelOp,
+    operation: channelOp, // el canal manda: la otra operación se deriva antes de buscar
     propertyType: type,
     zone: f.zone ?? undefined,
     roomsMin: f.rooms_min ?? undefined,
@@ -119,12 +123,21 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
     trace.push({ event: "unreadable", summary: "Además mandó algo que el bot no puede leer", details: { kinds: unreadable.map((m) => m.kind) } });
   }
 
+  // ── Otra operación (ej. alquiler en el canal de ventas): la atiende otra persona ──
+  const otherOp = (op: "sale" | "rent" | null | undefined) => !!op && op !== input.channelOperation;
+  if ((c.intent === "busqueda" || c.intent === "consulta_propiedad") && otherOp(c.filters.operation)) {
+    return handoff(`Pide ${c.filters.operation === "rent" ? "alquiler" : "venta"}: lo atiende otra persona`, PHRASES.otherOperation[c.filters.operation!]);
+  }
+
   // ── Datos: búsqueda por código ──
   let properties: PropertyFact[] = [];
   let searchNote: string | null = null;
   if (c.intent === "busqueda" || c.intent === "consulta_propiedad") {
     if (c.property_code) {
       const row = await deps.byCode(c.property_code.trim());
+      if (row && otherOp(row.operation)) {
+        return handoff(`Consulta por una propiedad en ${row.operation === "rent" ? "alquiler" : "venta"}: lo atiende otra persona`, PHRASES.otherOperation[row.operation!]);
+      }
       if (row) properties = [toFact(row)];
       else searchNote = `No hay ninguna propiedad disponible con el código ${c.property_code}.`;
     }

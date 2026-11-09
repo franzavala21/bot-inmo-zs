@@ -212,3 +212,24 @@ describe("looksLikeAddress", () => {
     expect(looksLikeAddress("Av. San Martín")).toBe(true);
   });
 });
+
+describe("otra operación en el canal", () => {
+  it("pide alquiler en el canal de ventas: frase fija, sin buscar ni redactar", async () => {
+    const llm = fakeLlm({ clasificacion: [cls({ filters: { ...cls().filters, operation: "rent" } })] });
+    let searched = false;
+    const d = await decide(input([msg("busco casa en alquiler")]), { ...deps(llm), search: async () => { searched = true; return []; } });
+    expect(d.action).toBe("handoff");
+    if (d.action === "handoff") expect(d.body).toBe(PHRASES.otherOperation.rent);
+    expect(searched).toBe(false);
+    expect(llm.calls).toEqual(["clasificacion"]);
+  });
+  it("pregunta por el código de una propiedad en alquiler: se deriva", async () => {
+    const llm = fakeLlm({ clasificacion: [cls({ intent: "consulta_propiedad", property_code: "ZHO2" })] });
+    const d = await decide(input([msg("info de ZHO2")]), { ...deps(llm), byCode: async () => ({ ...ROW, reference_code: "ZHO2", operation: "rent" }) });
+    expect(d.action).toBe("handoff");
+    if (d.action === "handoff") expect(d.body).toBe(PHRASES.otherOperation.rent);
+  });
+  it("la búsqueda siempre usa la operación del canal", () => {
+    expect(searchPlan(cls(), "sale")[0].filters.operation).toBe("sale");
+  });
+});

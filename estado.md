@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 3 (pipeline del bot). Primera prueba real por WhatsApp OK (2026-11-08). Falta probar audio y visita desde el teléfono. Bot APAGADO.
+**Fase actual:** 3 (pipeline del bot). Bot probado en real con texto, audio y visita. **WhatsApp bloqueó el chip el 2026-11-09**: canal caído, hay que decidir cómo seguir.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -59,7 +59,16 @@
 - [x] `bot-try.ts`: 13 casos OK (USD ~0,018 la corrida completa, ~USD 0,001–0,004 por respuesta).
 - [x] `/negocio` cargado (falta `requisitos_compra`, que queda vacío: si preguntan, deriva).
 - [x] Prueba real 2026-11-08: 2 mensajes y 2 respuestas enviadas, bitácora completa, costo USD 0,005. Después apagaron el bot.
-- [ ] Probar desde el teléfono un audio y un pedido de visita.
+- [x] Prueba real 2026-11-09: 2 audios transcriptos y respondidos; pedido de visita derivado con la frase fija.
+
+### Incidente: chip bloqueado (2026-11-09)
+- 14:41 prendieron el bot; 14:42 y 14:45 el bot mandó 2 respuestas (a un teléfono de los dueños). 14:46:49 el worker quedó `offline` pidiendo QR: la sesión se cerró desde WhatsApp (el worker archiva la sesión y pide QR nuevo; no se borró nada).
+- El usuario reporta el número bloqueado. Causa exacta: sin log de WhatsApp que la diga (hipótesis: chip nuevo + cliente no oficial).
+- `channels.bot_enabled` quedó en true: apagarlo desde `/conexion`.
+- No reescanear el QR con ese chip hasta resolver la revisión; nunca usar el número principal.
+
+### Alquileres en el canal de ventas (2026-11-09)
+- Decisión de los dueños: los alquileres los atiende otra persona. Si el cliente pide alquiler o consulta un código en alquiler, el bot deriva con frase fija, sin buscar ni redactar. La búsqueda usa siempre la operación del canal.
 
 ### Ajuste tras la prueba real (2026-11-08)
 - El verificador rechazaba "El precio es ARS 550.000" de un alquiler porque no decía si era mensual. Tokko no trae el período. Se reprodujo 3 de 3.
@@ -67,4 +76,3 @@
   - El redactor no menciona campos "sin dato" (ej. mascotas) ni agrega aclaraciones que DATOS no tiene.
   - Una "dirección exacta" sin número ni palabra de calle (un barrio) se descarta en código (`looksLikeAddress`).
   - Repetido 6 veces: 5 respuestas y 1 derivación por el control de código (ofreció "alguien del equipo"). Los 13 casos de `bot-try` siguen OK.
-- Para decidir: el canal de ventas hoy también muestra alquileres si el cliente los pide (hay 4 en Tokko).
