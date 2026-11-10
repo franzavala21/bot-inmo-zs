@@ -6,6 +6,7 @@ Las consultas de WhatsApp (muchas de noche, los fines de semana y por audio) que
 ## Reglas que no se negocian
 - No dar la dirección exacta de una propiedad ocupada.
 - No negociar precios ni confirmar visitas o reservas por WhatsApp.
+- Pasadas 24 h desde el último mensaje del cliente, no se manda texto libre: solo plantillas aprobadas por Meta (y con aprobación humana).
 - Ningún mensaje proactivo sale sin la aprobación de una persona.
 - No inventar datos: si no está en Tokko o en `info-negocio`, el bot no lo dice.
 - No dar consejo legal ni financiero. No compartir datos de otros clientes.
@@ -17,7 +18,7 @@ Las consultas de WhatsApp (muchas de noche, los fines de semana y por audio) que
 | F-02 | Sincronización de propiedades desde Tokko Broker (cron) | 1 |
 | F-03 | Proyección publicable de propiedades (lista blanca) | 1 |
 | F-04 | Buscador de propiedades con sinónimos | 1 |
-| F-05 | Conexión WhatsApp por Baileys (worker), intercambiable por Meta | 2 |
+| F-05 | Conexión WhatsApp por la API oficial de Meta (webhook en la web). Baileys queda como alternativa | 2 |
 | F-06 | Bandeja de conversaciones en tiempo real | 2 |
 | F-07 | Interruptor IA/humano por chat y envío desde el panel | 2 |
 | F-08 | Bot que responde con datos reales (clasificador, búsqueda, redactor) | 3 |
@@ -42,7 +43,6 @@ Las consultas de WhatsApp (muchas de noche, los fines de semana y por audio) que
 
 ## Fuera de alcance por ahora
 - Canal de ALQUILERES (el esquema ya lo soporta con `channels`).
-- API oficial de Meta (queda el webhook armado).
 - Sincronización con Google Calendar.
 - Escribir leads de vuelta en Tokko.
 - Roles distintos de dueño.

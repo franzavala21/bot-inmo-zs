@@ -20,8 +20,13 @@ const MAX_AGE_MS = 10 * 60_000;
 
 async function main() {
   const db = adminClient();
-  const { data: channel, error } = await db.from("channels").select("id").eq("slug", config.channelSlug).single();
+  const { data: channel, error } = await db.from("channels").select("id, transport").eq("slug", config.channelSlug).single();
   if (error || !channel) throw new Error(`No existe el canal "${config.channelSlug}" en la tabla channels`);
+  // Canal pasado a la API oficial: lo atiende la web. El worker no se conecta ni toma envíos (no pelean por la cola).
+  if (channel.transport === "meta") {
+    log.warn("el canal usa la API de Meta: este worker no hace nada. Apagalo en Railway.", { canal: config.channelSlug });
+    await new Promise(() => {}); // queda quieto sin reiniciarse en bucle
+  }
 
   const transport: Transport = config.transport === "fake" ? new FakeTransport() : new BaileysTransport();
   const status = new ChannelStatus(db, channel.id);

@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 3 (pipeline del bot). Bot probado en real con texto, audio y visita. **WhatsApp bloqueó el chip el 2026-11-09**: canal caído, hay que decidir cómo seguir.
+**Fase actual:** 3, pasando a la API oficial de Meta (decisión 2026-11-10). El bot ya funciona en real; el canal está caído hasta conectar Meta. Código listo y probado con tests; falta `0004` y la configuración en Meta.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -76,3 +76,28 @@
   - El redactor no menciona campos "sin dato" (ej. mascotas) ni agrega aclaraciones que DATOS no tiene.
   - Una "dirección exacta" sin número ni palabra de calle (un barrio) se descarta en código (`looksLikeAddress`).
   - Repetido 6 veces: 5 respuestas y 1 derivación por el control de código (ofreció "alguien del equipo"). Los 13 casos de `bot-try` siguen OK.
+
+## Paso a la API oficial de Meta (2026-11-10)
+- Decisión de los dueños: API oficial, **número principal en coexistencia** (sigue en la app WhatsApp Business del teléfono), **todo en Vercel** (Railway se apaga; no borrar el volumen).
+- Requisito de Meta: la coexistencia solo la activan Tech Providers o Solution Partners (Embedded Signup), con WhatsApp Business ≥ 2.24.17.
+  - Camino: desarrollar con el número de prueba de Meta y decidir después si ser Tech Provider propio (verificación del negocio y revisión de la app) o ir por un Solution Partner.
+  - Tras el alta hay 24 h para pedir la sincronización de contactos e historial (una sola vez).
+  - En coexistencia la app pierde: listas de difusión, mensajes temporales y "ver una vez", ubicación en tiempo real y llamadas; también las herramientas de empresa y el perfil.
+- Código:
+  - `packages/core/src/transport/meta.ts`: firma `X-Hub-Signature-256`, lectura del webhook (mensajes, ecos `smb_message_echoes`, estados fallidos) y `MetaClient` (enviar, bajar archivos, estado del número). Graph `v26.0` (configurable).
+  - `meta-dispatch.ts`: guarda en `ingest_inbound` y envía la cola desde la web, con ventana de 24 h, `is_test` y errores permanentes sin reintento.
+  - `/api/whatsapp/meta`: verificación GET y POST firmado. Guarda antes de responder (si falla, Meta reintenta) y después corre el bot y envía.
+  - Panel: el envío sale en el momento y avisa si no salió; botón "Reintentar"; pasadas 24 h se bloquea el envío con explicación; `/conexion` consulta a Meta el estado y la calidad del número.
+  - Worker: si el canal es `meta`, no se conecta ni toma envíos.
+- Migración `0004_meta.sql` (SIN aplicar): `channels.meta_phone_number_id`, `outbound_messages.claimed_at`, `fail_stale_sending`, `mark_delivery_failed`, `retry_outbound`.
+- Tests: 52 en core (14 nuevos de Meta).
+
+### Falta para conectar Meta
+- [ ] Aplicar `0004_meta.sql`.
+- [ ] App de Meta y número de prueba; su teléfono como destinatario de prueba.
+- [ ] Variables `META_ACCESS_TOKEN` (usuario del sistema, permanente), `META_APP_SECRET`, `META_VERIFY_TOKEN` en Vercel y redeploy.
+- [ ] Webhook en Meta → `/api/whatsapp/meta`, campo `messages`.
+- [ ] Pasar el canal ventas a `transport = 'meta'` con su `meta_phone_number_id`, y probar de punta a punta.
+- [ ] Apagar el worker en Railway, sin borrar el volumen.
+- [ ] Elegir el camino de la coexistencia (Tech Provider propio o Solution Partner) para el número principal.
+- Ojo, Fase 5: los avisos proactivos (F-15) van a necesitar plantillas aprobadas por Meta.

@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { adminClient } from "@inmo/core";
+import { adminClient, SERVICE_WINDOW_MS } from "@inmo/core";
 import { serverClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { contactLabel, KIND_LABEL, phonePretty, timeShort } from "@/lib/format";
 import { Composer } from "./composer";
 import { ModeToggle } from "./mode-toggle";
+import { RetryButton } from "./retry-button";
 
 type Msg = {
   id: string; author: "client" | "ai" | "human" | "system"; kind: string; body: string | null; media_path: string | null;
-  transcript: string | null; created_at: string; outbound_messages: { status: string; error: string | null }[];
+  transcript: string | null; created_at: string; outbound_messages: { id: string; status: string; error: string | null }[];
 };
 
 const EVENT_CLS: Record<string, string> = {
@@ -37,18 +38,22 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
   const sb = await serverClient();
   const [{ data: conv }, { data: msgs }] = await Promise.all([
     sb.from("conversations").select("id, mode, needs_attention, attention_reason, channel_id, contact:contacts(phone, name, display_name, is_test)").eq("id", id).maybeSingle(),
-    sb.from("messages").select("id, author, kind, body, media_path, transcript, created_at, outbound_messages(status, error)")
+    sb.from("messages").select("id, author, kind, body, media_path, transcript, created_at, outbound_messages(id, status, error)")
       .eq("conversation_id", id).order("created_at", { ascending: false }).limit(200),
   ]);
   if (!conv) notFound();
   const [{ data: channel }, { data: audit }] = await Promise.all([
-    sb.from("channels").select("worker_status, worker_heartbeat_at, bot_enabled").eq("id", conv.channel_id).maybeSingle(),
+    sb.from("channels").select("transport, worker_status, worker_heartbeat_at, bot_enabled").eq("id", conv.channel_id).maybeSingle(),
     sb.from("audit_log").select("id, event, summary, details, created_at").eq("conversation_id", id).order("created_at", { ascending: false }).limit(80),
   ]);
-  const online = channel?.worker_status === "online" &&
-    !!channel.worker_heartbeat_at && Date.now() - new Date(channel.worker_heartbeat_at).getTime() < 120_000;
+  const isMeta = channel?.transport === "meta";
+  // Con Meta no hay worker: se envía desde la web en el momento.
+  const online = isMeta || (channel?.worker_status === "online" &&
+    !!channel.worker_heartbeat_at && Date.now() - new Date(channel.worker_heartbeat_at).getTime() < 120_000);
 
   const messages = ((msgs ?? []) as unknown as Msg[]).reverse();
+  const lastClient = [...messages].reverse().find((m) => m.author === "client");
+  const windowClosed = isMeta && (!lastClient || Date.now() - new Date(lastClient.created_at).getTime() > SERVICE_WINDOW_MS);
   // Bucket privado: links firmados de corta duración para escuchar audios y ver imágenes.
   const paths = messages.map((m) => m.media_path).filter((p): p is string => !!p);
   const urls = new Map<string, string>();
@@ -104,6 +109,7 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
                 {m.transcript && <p className="mt-1 border-t border-zinc-200 pt-1 text-xs text-zinc-600">Transcripción: {m.transcript}</p>}
                 <div className="mt-1 flex justify-end gap-2 text-[11px] text-zinc-400">
                   {out && <span className={out.status === "failed" ? "text-red-600" : ""} title={out.error ?? undefined}>{STATUS_LABEL[out.status] ?? out.status}</span>}
+                  {out?.status === "failed" && !windowClosed && <RetryButton conversationId={conv.id} outboundId={out.id} />}
                   <span>{timeShort(m.created_at)}</span>
                 </div>
               </div>
@@ -112,7 +118,7 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
         })}
         {messages.length === 0 && <li className="text-center text-sm text-zinc-500">Sin mensajes.</li>}
       </ol>
-      <Composer conversationId={conv.id} mode={conv.mode} online={online} />
+      <Composer conversationId={conv.id} mode={conv.mode} online={online} windowClosed={windowClosed} />
     </div>
   );
 }

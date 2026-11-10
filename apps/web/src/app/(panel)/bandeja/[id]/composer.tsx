@@ -2,7 +2,7 @@
 import { useRef, useState, useTransition } from "react";
 import { sendReply } from "../actions";
 
-export function Composer({ conversationId, mode, online }: { conversationId: string; mode: "ai" | "human"; online: boolean }) {
+export function Composer({ conversationId, mode, online, windowClosed = false }: { conversationId: string; mode: "ai" | "human"; online: boolean; windowClosed?: boolean }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -17,6 +17,14 @@ export function Composer({ conversationId, mode, online }: { conversationId: str
     });
   };
 
+  if (windowClosed) {
+    return (
+      <div className="border-t border-zinc-200 bg-white p-3 text-sm text-amber-800">
+        Pasaron más de 24 h desde el último mensaje del cliente. WhatsApp no deja mandarle texto libre desde acá:
+        escribile desde el teléfono o esperá a que vuelva a escribir.
+      </div>
+    );
+  }
   return (
     <div className="space-y-1 border-t border-zinc-200 bg-white p-3">
       {mode === "ai" && <p className="text-xs text-zinc-500">Si respondés, el chat pasa a modo humano y el bot deja de contestar acá.</p>}
