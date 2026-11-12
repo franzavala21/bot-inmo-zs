@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Rutas públicas declaradas. Todo lo demás exige sesión de un dueño.
-const PUBLIC = ["/login", "/auth/callback", "/api/inbound", "/api/cron", "/api/whatsapp/meta", "/api/health"];
+const PUBLIC = ["/login", "/auth/callback", "/api/inbound", "/api/cron", "/api/whatsapp/meta", "/api/health", "/privacidad"];
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;

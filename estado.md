@@ -100,4 +100,7 @@
 - [ ] Pasar el canal ventas a `transport = 'meta'` con su `meta_phone_number_id`, y probar de punta a punta.
 - [ ] Apagar el worker en Railway, sin borrar el volumen.
 - [ ] Elegir el camino de la coexistencia (Tech Provider propio o Solution Partner) para el número principal.
+- [x] Página pública `/privacidad` (política de privacidad y eliminación de datos, para publicar la app). Revisarla con un abogado.
+- [ ] La política promete borrar los datos de quien lo pida: falta un botón en el panel para borrar un contacto (hoy sería a mano en Supabase).
+- [ ] Claves de Meta expuestas en una captura (2026-11-12): restablecer el App Secret y regenerar los tokens antes de cargarlos en Vercel.
 - Ojo, Fase 5: los avisos proactivos (F-15) van a necesitar plantillas aprobadas por Meta.
