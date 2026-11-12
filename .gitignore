@@ -12,3 +12,4 @@ auth_info*/
 *.log
 .vercel/
 .DS_Store
+.env.local
