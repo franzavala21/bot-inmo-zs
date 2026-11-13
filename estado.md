@@ -133,3 +133,10 @@
 - Está en `runBotTurn` (`silentHandoff`, por defecto true). El orquestador no cambió. Regla 14 de `redactor.md`: si `needs_human`, la respuesta es un borrador para el equipo.
 - **Riesgo:** sin el aviso por email configurado, el cliente queda sin respuesta hasta que alguien mire el panel.
 - Prueba real 2026-11-13 (chat de los dueños): saludo, búsqueda, terrenos, audio, horarios OK; el verificador frenó "sobre Ruta E-53" y el segundo intento salió bien; visita derivada. No se probaron dirección, descuento, alquiler, foto ni pedir humano (el chat quedó en humano).
+
+## Links a la web propia (2026-11-13)
+- Pedido de los dueños: la ficha de Tokko (`ficha.info`) a veces no abre. Ahora el bot manda la página de la propiedad en inmobiliariazavalaseppey.com.ar.
+- La web arma `/propiedad/<texto>-<id Tokko>/` y el texto tiene que ser exacto (si no, 404). Por eso cada sincronización lee el sitemap (`src/web/site-links.ts`) y guarda `properties.web_url`. Si el sitemap falla, los links quedan como estaban.
+- `toFact`: `link = web_url || public_url`. Si una propiedad nueva todavía no está en la web, va la ficha.
+- Verificado el 2026-11-13: 77 de 77 propiedades activas tienen página en la web.
+- [ ] Aplicar `0006_web_url.sql` ANTES de desplegar el código (la búsqueda pide la columna `web_url`).

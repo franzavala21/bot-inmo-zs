@@ -7,7 +7,7 @@ export interface PublicRow {
   price: number | null; currency: string | null; expenses: number | null; zone: string | null;
   rooms: number | null; bedrooms: number | null; bathrooms: number | null;
   surface_total: number | null; surface_covered: number | null; pets_allowed: boolean | null;
-  amenities: string[] | null; public_url: string | null;
+  amenities: string[] | null; public_url: string | null; web_url?: string | null;
 }
 
 /** 59000 → "59.000" (formato argentino). */
@@ -32,7 +32,8 @@ export function toFact(r: PublicRow): PropertyFact {
     superficie_cubierta_m2: pos(r.surface_covered),
     mascotas: r.pets_allowed == null ? "sin dato" : r.pets_allowed ? "sí" : "no",
     caracteristicas: (r.amenities ?? []).slice(0, 25),
-    link: r.public_url,
+    // Primero la página de la inmobiliaria; si la web todavía no la tiene, la ficha de Tokko.
+    link: r.web_url || r.public_url,
     descripcion: r.description ? r.description.slice(0, 900) : null,
   };
 }
