@@ -16,13 +16,26 @@ export interface RunTurnOptions {
   /** Mensajes del bot por contacto por hora antes de pasar a una persona. */
   maxPerHour?: number;
   historyLimit?: number;
+  /**
+   * Derivación en silencio (decisión de los dueños, 2026-11-13): al derivar, el bot no le escribe al cliente.
+   * El chat pasa a modo humano, se avisa a los dueños y lo que el bot iba a decir queda como respuesta sugerida.
+   */
+  silentHandoff?: boolean;
 }
 
 export type TurnResult = "skipped" | "ignored" | "sent" | "handoff" | "human" | "stale" | "error";
 
-async function commit(db: SupabaseClient, conversationId: string, messageId: string, a: {
+/** Derivación en silencio: el texto no se envía, queda en la bitácora como sugerencia para el dueño. */
+export function silence<T extends { body: string | null; handoff: boolean; trace: TraceEntry[] }>(a: T): T {
+  if (!a.handoff || !a.body?.trim()) return a;
+  return { ...a, body: null, trace: [...a.trace, { event: "suggested", summary: "El bot no le respondió al cliente: pasó el chat a una persona y dejó una respuesta sugerida",
+    details: { body: a.body } }] };
+}
+
+async function commit(db: SupabaseClient, conversationId: string, messageId: string, a0: {
   body: string | null; handoff: boolean; reason: string | null; trace: TraceEntry[]; codes?: string[];
-}): Promise<TurnResult> {
+}, silent = true): Promise<TurnResult> {
+  const a = silent ? silence(a0) : a0;
   const { data, error } = await db.rpc("bot_commit", {
     p_conversation_id: conversationId, p_message_id: messageId, p_body: a.body, p_handoff: a.handoff,
     p_reason: a.reason, p_trace: a.trace, p_send_details: { property_codes: a.codes ?? [] },
@@ -35,6 +48,7 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
   const { data: claimed, error: claimErr } = await db.rpc("claim_bot_turn", { p_conversation_id: conversationId, p_message_id: messageId });
   if (claimErr) throw new Error(`claim_bot_turn: ${claimErr.message}`);
   if (!claimed) return "skipped";
+  const silent = opts.silentHandoff ?? true;
 
   let usage: Usage = emptyUsage();
   try {
@@ -48,12 +62,12 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
     const { data: today } = await db.from("usage_daily").select("cost_usd").eq("day", new Date().toISOString().slice(0, 10)).maybeSingle();
     if (Number(today?.cost_usd ?? 0) >= cap) {
       return await commit(db, conversationId, messageId, { body: null, handoff: true,
-        reason: "El bot llegó al tope de gasto del día", trace: [{ event: "limit", summary: `Tope diario de gasto alcanzado (USD ${cap})` }] });
+        reason: "El bot llegó al tope de gasto del día", trace: [{ event: "limit", summary: `Tope diario de gasto alcanzado (USD ${cap})` }] }, silent);
     }
     const { data: count } = await db.rpc("bump_rate", { p_contact_id: conv.contact_id });
     if (Number(count) > (opts.maxPerHour ?? 20)) {
       return await commit(db, conversationId, messageId, { body: null, handoff: true,
-        reason: "Demasiados mensajes en una hora", trace: [{ event: "limit", summary: "Límite de mensajes por hora de este contacto" }] });
+        reason: "Demasiados mensajes en una hora", trace: [{ event: "limit", summary: "Límite de mensajes por hora de este contacto" }] }, silent);
     }
 
     // ── Historial (y transcripción de audios pendientes) ──
@@ -115,13 +129,13 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
     return await commit(db, conversationId, messageId, {
       body: decision.body, handoff: decision.action === "handoff", reason: decision.action === "handoff" ? decision.reason : null,
       trace: allTrace, codes: decision.propertyCodes,
-    });
+    }, silent);
   } catch (e) {
     console.error("[bot] error en el turno conv=%s: %s", conversationId, (e as Error).message);
     // Salida de emergencia: avisar al cliente y pasar el chat a una persona.
     try {
       return await commit(db, conversationId, messageId, { body: PHRASES.generic, handoff: true, reason: "Error interno del bot",
-        trace: [{ event: "agent_error", summary: "Error interno del bot", details: { error: (e as Error).message.slice(0, 200) } }] });
+        trace: [{ event: "agent_error", summary: "Error interno del bot", details: { error: (e as Error).message.slice(0, 200) } }] }, silent);
     } catch { return "error"; }
   } finally {
     if (usage.costUsd > 0 || usage.inputTokens > 0) {

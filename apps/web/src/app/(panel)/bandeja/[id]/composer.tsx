@@ -2,7 +2,7 @@
 import { useRef, useState, useTransition } from "react";
 import { sendReply } from "../actions";
 
-export function Composer({ conversationId, mode, online, windowClosed = false }: { conversationId: string; mode: "ai" | "human"; online: boolean; windowClosed?: boolean }) {
+export function Composer({ conversationId, mode, online, windowClosed = false, suggestion = null }: { conversationId: string; mode: "ai" | "human"; online: boolean; windowClosed?: boolean; suggestion?: string | null }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -20,13 +20,20 @@ export function Composer({ conversationId, mode, online, windowClosed = false }:
   if (windowClosed) {
     return (
       <div className="border-t border-zinc-200 bg-white p-3 text-sm text-amber-800">
-        Pasaron más de 24 h desde el último mensaje del cliente. WhatsApp no deja mandarle texto libre desde acá:
-        escribile desde el teléfono o esperá a que vuelva a escribir.
+        Pasaron más de 24 h desde el último mensaje del cliente. WhatsApp solo deja mandarle plantillas aprobadas por Meta
+        (todavía no están armadas): hay que esperar a que vuelva a escribir.
       </div>
     );
   }
   return (
     <div className="space-y-1 border-t border-zinc-200 bg-white p-3">
+      {suggestion && !text && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-sm">
+          <div className="text-xs font-medium text-emerald-800">El bot no le respondió. Esto es lo que sugería decirle (revisalo antes de mandar):</div>
+          <p className="mt-1 whitespace-pre-wrap text-zinc-700">{suggestion}</p>
+          <button onClick={() => { setText(suggestion); ref.current?.focus(); }} className="mt-1 text-xs text-emerald-800 underline">Usar como borrador</button>
+        </div>
+      )}
       {mode === "ai" && <p className="text-xs text-zinc-500">Si respondés, el chat pasa a modo humano y el bot deja de contestar acá.</p>}
       {!online && <p className="text-xs text-amber-700">WhatsApp está desconectado: el mensaje queda en cola y sale cuando se reconecte.</p>}
       <div className="flex gap-2">

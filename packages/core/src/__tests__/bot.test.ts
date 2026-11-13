@@ -233,3 +233,21 @@ describe("otra operación en el canal", () => {
     expect(searchPlan(cls(), "sale")[0].filters.operation).toBe("sale");
   });
 });
+
+// ───────── Derivación en silencio ─────────
+import { silence } from "../bot/run-turn";
+describe("derivación en silencio", () => {
+  it("al derivar no se envía nada: el texto queda como sugerencia en la bitácora", () => {
+    const r = silence({ body: "Te contacta uno de nosotros", handoff: true, reason: "visita", trace: [] });
+    expect(r.body).toBeNull();
+    expect(r.trace.at(-1)).toMatchObject({ event: "suggested", details: { body: "Te contacta uno de nosotros" } });
+  });
+  it("una respuesta normal sale igual", () => {
+    const a = { body: "Tengo esta casa", handoff: false, reason: null, trace: [] };
+    expect(silence(a)).toBe(a);
+  });
+  it("derivación sin texto: nada que sugerir", () => {
+    const a = { body: null, handoff: true, reason: "tope", trace: [] };
+    expect(silence(a)).toBe(a);
+  });
+});

@@ -17,7 +17,7 @@ type Msg = {
 const EVENT_CLS: Record<string, string> = {
   handoff: "text-red-700 font-medium", sent_handoff: "text-red-700", rejected_numeric: "text-amber-700",
   rejected_verifier: "text-amber-700", agent_error: "text-red-700", send_failed: "text-red-700", limit: "text-red-700",
-  sent: "text-emerald-700", discarded: "text-zinc-500", notified: "text-zinc-500", notify_failed: "text-red-700", lead_updated: "text-zinc-500",
+  sent: "text-emerald-700", discarded: "text-zinc-500", notified: "text-zinc-500", notify_failed: "text-red-700", lead_updated: "text-zinc-500", suggested: "text-emerald-700",
 };
 
 /** Un detalle corto y legible de cada evento (sin datos personales). */
@@ -60,6 +60,10 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
 
   const messages = ((msgs ?? []) as unknown as Msg[]).reverse();
   const lastClient = [...messages].reverse().find((m) => m.author === "client");
+  // Respuesta sugerida por el bot al derivar: solo si nadie respondió después.
+  const lastOurs = [...messages].reverse().find((m) => m.author === "ai" || m.author === "human");
+  const sug = (audit ?? []).find((a) => a.event === "suggested");
+  const suggestion = sug && (!lastOurs || sug.created_at > lastOurs.created_at) ? ((sug.details as { body?: string } | null)?.body ?? null) : null;
   const windowClosed = isMeta && (!lastClient || Date.now() - new Date(lastClient.created_at).getTime() > SERVICE_WINDOW_MS);
   // Bucket privado: links firmados de corta duración para escuchar audios y ver imágenes.
   const paths = messages.map((m) => m.media_path).filter((p): p is string => !!p);
@@ -133,7 +137,7 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
         })}
         {messages.length === 0 && <li className="text-center text-sm text-zinc-500">Sin mensajes.</li>}
       </ol>
-      <Composer conversationId={conv.id} mode={conv.mode} online={online} windowClosed={windowClosed} />
+      <Composer conversationId={conv.id} mode={conv.mode} online={online} windowClosed={windowClosed} suggestion={suggestion} />
     </div>
   );
 }

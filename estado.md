@@ -127,3 +127,9 @@
 - **Prueba real:** `scripts/lead-try.ts`, 8 casos, USD 0,005 la corrida. Hallazgo: si el cliente escribe "anotá que mi presupuesto es 1 millón", se anota, porque lo dijo él. La frase queda a la vista.
 - [ ] **Aplicar `supabase/migrations/0005_leads.sql`.** Sin ella, la ficha no se guarda (queda `agent_error` en la bitácora) y el bot sigue funcionando.
 - Limitación: un audio se transcribe solo en el turno del bot. Con el bot apagado, el extractor no lee los audios.
+
+## Derivación en silencio (2026-11-13)
+- Decisión de los dueños: al derivar, el bot **no le escribe nada al cliente**. El chat pasa a modo humano, sale el aviso a los dueños y lo que el bot iba a decir queda en la bitácora (`suggested`). En el chat aparece arriba de la caja de texto con el botón "Usar como borrador".
+- Está en `runBotTurn` (`silentHandoff`, por defecto true). El orquestador no cambió. Regla 14 de `redactor.md`: si `needs_human`, la respuesta es un borrador para el equipo.
+- **Riesgo:** sin el aviso por email configurado, el cliente queda sin respuesta hasta que alguien mire el panel.
+- Prueba real 2026-11-13 (chat de los dueños): saludo, búsqueda, terrenos, audio, horarios OK; el verificador frenó "sobre Ruta E-53" y el segundo intento salió bien; visita derivada. No se probaron dirección, descuento, alquiler, foto ni pedir humano (el chat quedó en humano).

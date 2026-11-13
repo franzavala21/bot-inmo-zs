@@ -34,8 +34,8 @@ export function buildHandoffEmail(a: { reason: string; link: string; deadline: D
   const limit = a.deadline
     ? `Respondé antes del ${fmt(a.deadline)}: después WhatsApp solo deja mandar plantillas aprobadas.`
     : "No se pudo calcular la hora límite de las 24 h: revisalo cuanto antes.";
-  const text = [`El bot pasó un chat a una persona.`, ``, `Motivo: ${reason}`, limit, ``, `Abrir el chat: ${a.link}`].join("\n");
-  const html = `<p>El bot pasó un chat a una persona.</p>
+  const text = [`El bot pasó un chat a una persona. El cliente todavía no recibió respuesta.`, ``, `Motivo: ${reason}`, limit, ``, `Abrir el chat: ${a.link}`].join("\n");
+  const html = `<p>El bot pasó un chat a una persona. <b>El cliente todavía no recibió respuesta.</b></p>
 <p><b>Motivo:</b> ${esc(reason)}<br>${esc(limit)}</p>
 <p><a href="${esc(a.link)}">Abrir el chat en el panel</a></p>`;
   return { subject, text, html };
