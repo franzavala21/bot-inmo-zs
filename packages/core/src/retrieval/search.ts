@@ -8,6 +8,7 @@ export interface SearchFilters {
   zone?: string;
   roomsMin?: number;
   bedroomsMin?: number;
+  priceMin?: number;
   priceMax?: number;
   currency?: string;
   pets?: boolean;
@@ -51,6 +52,7 @@ export async function searchProperties(db: SupabaseClient, f: SearchFilters) {
   if (f.zone) q = q.ilike("zone", `%${f.zone.normalize("NFD").replace(/[\u0300-\u036f]/g, "")}%`);
   if (f.roomsMin) q = q.gte("rooms", f.roomsMin);
   if (f.bedroomsMin) q = q.gte("bedrooms", f.bedroomsMin);
+  if (f.priceMin) q = q.gte("price", f.priceMin);
   if (f.priceMax) q = q.lte("price", f.priceMax);
   if (f.currency) q = q.eq("currency", f.currency);
   if (f.pets === true) q = q.or("pets_allowed.is.null,pets_allowed.eq.true");
@@ -58,7 +60,8 @@ export async function searchProperties(db: SupabaseClient, f: SearchFilters) {
     const terms = normalize(f.text).split(" ").filter((t) => t.length > 2).slice(0, 5);
     for (const t of terms) q = q.ilike("search_text", `%${t}%`);
   }
-  const { data, error } = await q.order("price", { ascending: true, nullsFirst: false });
+  // Con presupuesto, primero lo más cercano al tope (lo que el cliente puede pagar), no lo más barato.
+  const { data, error } = await q.order("price", { ascending: !f.priceMax, nullsFirst: false });
   if (error) throw error;
   return data ?? [];
 }

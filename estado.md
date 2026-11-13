@@ -146,3 +146,12 @@
 - Se usa solo el nombre de pila y solo si parece un nombre: una palabra de letras, sin siglas ni apodos tipo "Mami", ni palabras como "Inmobiliaria". Si no hay uno confiable, no se usa ninguno.
 - Límite: un perfil cuya primera palabra sea una palabra común ("Ignorá…") pasa como nombre. No es un riesgo de seguridad, porque solo llega una palabra.
 - `bot-try`: 15 casos OK con nombre y sin nombre (USD 0,021). Las respuestas ya llevan el link de la web.
+
+## Arreglo tras el chat de Luca (2026-11-13)
+- Qué pasó: pidió comprar en Río Ceballos "entre 80k y 130k USD" sin decir el tipo. La bitácora muestra `price_max 130000`, `property_type ""` y 3 lotes de USD 20–35 mil (la búsqueda ordenaba del más barato). El bot dijo "no tengo casas", y había una de USD 95.000 (ZHO6596706).
+- Arreglos:
+  - **Rango:** el clasificador guarda `price_min` y la búsqueda filtra por rango. Con presupuesto, la búsqueda ordena de la más cara a la más barata (lo más cercano al tope primero).
+  - **Sin tipo:** trae 30 resultados, muestra 3 alternando tipos y la nota le dice al redactor qué tipos hay ("Terreno (1), Casa (1)") para que pregunte cuál prefiere.
+  - **"No hay / solo hay":** ahora es un control de código (`claimsNoneWithoutSupport`), no del verificador: el modelo lo marcaba aunque la nota lo respaldara. Solo se permite si la búsqueda fue aproximada o vacía. Si no, se rechaza con instrucciones y se reintenta.
+  - Regla 16 en `redactor.md`.
+- `bot-try`: 17 casos OK (se agregaron `luca` y `luca_sigue`), USD 0,026.

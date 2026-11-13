@@ -35,6 +35,16 @@ export function looksLikeAddress(quote: string): boolean {
   return /\d/.test(q) || STREET_WORDS.test(q);
 }
 
+// "No tengo casas", "solo hay terrenos": las fichas son una muestra, así que eso solo se puede decir si la búsqueda
+// lo respalda (nota de búsqueda aproximada o vacía). Caso real 2026-11-13: dijo que no había casas y había una de USD 95.000.
+const CLAIMS_NONE = /\b(no (tengo|hay|tenemos|contamos con|dispongo de|cuento con)|s[oó]lo (tengo|hay|tenemos|cuento con))\b[^.?!\n]{0,50}\b(casas?|terrenos?|lotes?|departamentos?|deptos?|ph|locales?|oficinas?|propiedad(es)?|opci[oó]n(es)?|nada)\b/i;
+export function claimsNoneWithoutSupport(reply: string, searchNote: string | null, searched: boolean): string | null {
+  // Solo la búsqueda aproximada o vacía respalda un "no hay" (la nota de tipos disponibles no).
+  if (!searched || (searchNote && /^(Aproximada|No hay)/.test(searchNote))) return null;
+  const m = reply.match(CLAIMS_NONE);
+  return m ? m[0] : null;
+}
+
 export function impliesHandoff(reply: string): string | null {
   if (PROMISES_HUMAN.test(reply)) return "La respuesta le dice al cliente que sigue una persona del equipo";
   if (LACKS_DATA.test(reply)) return "El cliente pidió un dato que el bot no tiene";
@@ -50,6 +60,17 @@ export function pendingTurn(history: HistoryMsg[]): HistoryMsg[] {
 }
 
 /** Pasos de búsqueda: exacta y, si no hay nada, cada vez más amplia. */
+/** Elige hasta MAX_RESULTS alternando tipos (en el orden que vino) y cuenta cuántas hay de cada tipo. */
+export function mixByType<T extends { property_type: string | null }>(rows: T[], max = MAX_RESULTS): { picked: T[]; counts: [string, number][] } {
+  const groups = new Map<string, T[]>();
+  for (const r of rows) { const k = r.property_type ?? "Otro"; groups.set(k, [...(groups.get(k) ?? []), r]); }
+  const picked: T[] = [];
+  for (let i = 0; picked.length < max && i < rows.length; i++) {
+    for (const g of groups.values()) { if (g[i] && picked.length < max) picked.push(g[i]); }
+  }
+  return { picked, counts: [...groups.entries()].map(([k, v]) => [k, v.length]) };
+}
+
 export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { filters: SearchFilters; note: string | null }[] {
   const f = c.filters;
   const type = f.property_type ? normalize(f.property_type) : undefined;
@@ -59,16 +80,17 @@ export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { fil
     zone: f.zone ?? undefined,
     roomsMin: f.rooms_min ?? undefined,
     bedroomsMin: f.bedrooms_min ?? undefined,
+    priceMin: f.price_min ?? undefined,
     priceMax: f.price_max ?? undefined,
-    currency: f.price_max ? (f.currency ?? undefined) : undefined,
+    currency: f.price_max || f.price_min ? (f.currency ?? undefined) : undefined,
     pets: f.pets === true ? true : undefined,
     text: f.keywords ?? undefined,
     limit: MAX_RESULTS,
   };
   const steps: { filters: SearchFilters; note: string | null }[] = [{ filters: base, note: null }];
-  if (base.text) steps.push({ filters: { ...base, text: undefined }, note: "Aproximada: sin las características pedidas (" + base.text + ")." });
-  if (base.priceMax || base.roomsMin || base.bedroomsMin)
-    steps.push({ filters: { ...base, text: undefined, priceMax: undefined, currency: undefined, roomsMin: undefined, bedroomsMin: undefined },
+  if (base.text) steps.push({ filters: { ...base, text: undefined }, note: "Aproximada: no hay con todas las características pedidas (" + base.text + "); se muestran sin esa condición." });
+  if (base.priceMax || base.priceMin || base.roomsMin || base.bedroomsMin)
+    steps.push({ filters: { ...base, text: undefined, priceMin: undefined, priceMax: undefined, currency: undefined, roomsMin: undefined, bedroomsMin: undefined },
       note: "Aproximada: no hay con ese presupuesto/ambientes; se muestran las más cercanas en precio de la misma zona y tipo." });
   if (base.zone && base.propertyType)
     steps.push({ filters: { operation: base.operation, propertyType: base.propertyType, limit: MAX_RESULTS },
@@ -132,6 +154,7 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
   // ── Datos: búsqueda por código ──
   let properties: PropertyFact[] = [];
   let searchNote: string | null = null;
+  let didSearch = false;
   if (c.intent === "busqueda" || c.intent === "consulta_propiedad") {
     if (c.property_code) {
       const row = await deps.byCode(c.property_code.trim());
@@ -146,13 +169,23 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       searchNote = "Son las fichas que el bot ya mostró en este chat.";
     }
     const f = c.filters;
-    const hasCriteria = !!(f.property_type || f.zone || f.rooms_min || f.bedrooms_min || f.price_max || f.keywords || f.pets);
+    const hasCriteria = !!(f.property_type || f.zone || f.rooms_min || f.bedrooms_min || f.price_max || f.price_min || f.keywords || f.pets);
     if (!properties.length && c.intent === "busqueda" && !hasCriteria) {
       searchNote = "El cliente todavía no dio ningún criterio: no se buscó. Preguntale qué tipo de propiedad y en qué zona.";
     } else if (!properties.length && c.intent === "busqueda") {
+      didSearch = true;
       for (const step of searchPlan(c, input.channelOperation)) {
-        const rows = await deps.search(step.filters);
-        if (rows.length) { properties = rows.map(toFact); searchNote = step.note; break; }
+        // Sin tipo de propiedad: se trae una muestra amplia y se elige variada, para que el cliente vea qué hay y elija.
+        const rows = await deps.search(step.filters.propertyType ? step.filters : { ...step.filters, limit: 30 });
+        if (!rows.length) continue;
+        if (step.filters.propertyType) { properties = rows.map(toFact); searchNote = step.note; break; }
+        const mix = mixByType(rows);
+        properties = mix.picked.map(toFact);
+        const types = mix.counts.map(([t, n]) => `${t} (${n}${n >= 30 ? " o más" : ""})`).join(", ");
+        searchNote = [step.note, mix.counts.length > 1
+          ? `El cliente no dijo qué tipo de propiedad busca. Con esos criterios hay: ${types}. Mostrá estas de muestra y preguntale qué tipo prefiere.`
+          : null].filter(Boolean).join(" ") || null;
+        break;
       }
       if (!properties.length) searchNote = "No hay propiedades disponibles con esos criterios ni parecidas.";
     }
@@ -193,9 +226,16 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       continue;
     }
 
+    const none = claimsNoneWithoutSupport(reply, searchNote, didSearch);
+    if (none) {
+      trace.push({ event: "rejected_claim", summary: "Control de código: dijo que no hay algo que la búsqueda no descartó", details: { attempt, quote: none } });
+      feedback = [`Dijiste «${none}», pero las fichas son solo una muestra: no digas que no hay o que solo hay algo. Mostrá las fichas y, si falta saber el tipo, preguntalo.`];
+      continue;
+    }
+
     let v;
     try {
-      const r = await verifyReply(deps.llm, { history: input.history, properties, businessInfo: input.businessInfo, reply });
+      const r = await verifyReply(deps.llm, { history: input.history, properties, searchNote, businessInfo: input.businessInfo, reply });
       v = r.data; usage = addUsage(usage, r.usage);
     } catch (e) {
       trace.push({ event: "agent_error", summary: "El verificador falló", details: { error: (e as Error).message.slice(0, 200) } });
