@@ -107,3 +107,8 @@
 - [x] Página `/privacidad`. Revisarla con un abogado.
 - [ ] Botón en el panel para borrar los datos de un contacto (lo promete la política).
 - Ojo, Fase 5: los avisos proactivos (F-15) van a necesitar plantillas aprobadas por Meta.
+
+## Prompt principal en .md (2026-11-12)
+- `packages/core/prompts/redactor.md` es la fuente del prompt del redactor. `pnpm --filter @inmo/core prompts` genera `src/bot/prompts.generated.ts` (no se edita a mano). El build de la web lo regenera solo.
+- Tests: si el `.md` y el generado no coinciden, o falta `{{GUARDIA}}`, `{{PRESENTACION}}`, `needs_human`, `property_codes_used` o `human_reason`, fallan. Si en producción faltara una pieza, el redactor falla y el orquestador deriva.
+- Se agregó el nombre "Zavala Seppey". `bot-try`: 15 casos OK (USD 0,019).

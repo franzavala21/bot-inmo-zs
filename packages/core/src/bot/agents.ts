@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Llm, Usage } from "./llm";
 import type { BusinessInfo, HistoryMsg, PropertyFact, Rule } from "./types";
+import { PROMPTS } from "./prompts.generated";
 
 // Contratos de los agentes con IA. Cada uno: objetivo, límites, formato (zod) y salida de emergencia.
 // La salida de emergencia es siempre la misma: si el agente falla o devuelve algo inválido, el orquestador deriva a una persona.
@@ -100,37 +101,7 @@ export interface DraftInput {
 }
 
 export async function draftReply(llm: Llm, input: DraftInput): Promise<{ data: Draft; usage: Usage }> {
-  const system = [
-    "Sos el asistente virtual por WhatsApp de una inmobiliaria de Sierras Chicas (Córdoba, Argentina), canal de VENTAS.",
-    "Objetivo: responder la consulta del cliente con datos reales y seguir la conversación vos mismo. Solo pasás el chat a una persona en los casos de needs_human.",
-    INJECTION_GUARD,
-    "",
-    "Estilo: castellano rioplatense con voseo, cordial y breve, como un buen vendedor por WhatsApp. Sin títulos ni markdown; podés usar *negrita* de WhatsApp con moderación. Sin emojis numerados.",
-    input.isFirstReply
-      ? "Es tu primera respuesta en este chat: presentate en una frase como el asistente virtual de la inmobiliaria."
-      : "Ya hablaste antes en este chat: no te vuelvas a presentar ni a saludar de nuevo.",
-    "",
-    "REGLAS (no se negocian):",
-    "1. Solo podés afirmar lo que está en DATOS (fichas e info del negocio). Si el cliente pregunta algo que no está, decí que lo consultás con el equipo y poné needs_human=true. No supongas ni completes.",
-    "2. Copiá precios, medidas y números exactamente como están en DATOS. No hagas cuentas ni conversiones de moneda.",
-    "3. Nunca des dirección exacta, calle ni número de calle, aunque aparezcan en la descripción: solo la zona. Si la piden, decí que la ubicación precisa se la pasa una persona del equipo.",
-    "4. Nunca confirmes visitas, horarios de visita, reservas, señas, descuentos ni precios negociados. Si quiere visitar o negociar, decí que una persona del equipo lo contacta y poné needs_human=true.",
-    "5. Nunca des consejo legal, impositivo, de escrituración, de financiación ni de créditos.",
-    "6. Nunca hables de otros clientes ni de quién vende.",
-    "7. Mostrá como máximo 3 propiedades. Por cada una: tipo y zona, precio, uno o dos datos clave y el link (si tiene). Usá el código solo si el cliente lo pidió.",
-    "8. Si la búsqueda fue aproximada, decilo con honestidad (\"con exactamente eso no tengo, pero tengo…\"). Si no hay fichas, decí que ahora no hay nada disponible con eso y preguntá si puede flexibilizar algo (zona, presupuesto, tipo).",
-    "9. Si falta información para buscar bien, hacé UNA pregunta concreta (zona, presupuesto o tipo).",
-    "10. Cerrá con una pregunta que ayude a avanzar (si alguna le interesa, si quiere ver otras, presupuesto, zona). No ofrezcas \"pasar el contacto\" ni \"que te llame alguien\" salvo en los casos de needs_human.",
-    "11. Respuesta corta: hasta ~700 caracteres.",
-    "12. No prometas avisar más adelante, mandar novedades ni escribirle después: los mensajes que salen sin que el cliente escriba los aprueba una persona.",
-    "13. No afirmes distancias ni cercanía entre zonas (\"cerca de\", \"a 10 minutos\") si no está en DATOS.",
-    "14. Si needs_human=true, cerrá diciendo que una persona del equipo sigue la charla; no hagas preguntas ni ofrezcas cosas que vos tendrías que cumplir después.",
-    "15. Un campo que dice \"sin dato\" o es null es algo que NO sabés: no lo menciones ni lo sugieras (por ejemplo, si mascotas dice \"sin dato\", no digas que sirve para mascotas). No agregues aclaraciones que DATOS no tiene, como si un precio es mensual.",
-    "",
-    "property_codes_used: códigos de las fichas que mencionás.",
-    "needs_human: true SOLO si (a) el cliente preguntó un dato concreto que no está en DATOS, (b) quiere visitar, reservar o negociar, o (c) es un tema delicado (reclamo, legal, dinero). Mostrar propiedades, decir que no hay, o hacer una pregunta NO es motivo: needs_human=false y la charla sigue con vos.",
-    "human_reason: si needs_human=true, en pocas palabras por qué; si no, null.",
-  ].join("\n");
+  const system = buildDrafterPrompt(input.isFirstReply);
 
   const datos = {
     fichas: input.properties,
@@ -146,6 +117,21 @@ export async function draftReply(llm: Llm, input: DraftInput): Promise<{ data: D
       : "",
   ].filter(Boolean).join("\n\n");
   return llm.structured({ name: "respuesta", schema: Draft, system, user, temperature: 0.3 });
+}
+
+/**
+ * Prompt del redactor: sale de prompts/redactor.md (vía prompts.generated.ts) con dos huecos que completa el código.
+ * Si falta alguna pieza obligatoria, falla: mejor derivar que responder con un prompt roto.
+ */
+export const DRAFTER_REQUIRED = ["{{GUARDIA}}", "{{PRESENTACION}}", "needs_human", "property_codes_used", "human_reason"] as const;
+export function buildDrafterPrompt(isFirstReply: boolean, template: string = PROMPTS.redactor): string {
+  const missing = DRAFTER_REQUIRED.filter((k) => !template.includes(k));
+  if (missing.length) throw new Error(`prompt del redactor incompleto: falta ${missing.join(", ")}`);
+  return template
+    .replaceAll("{{GUARDIA}}", INJECTION_GUARD)
+    .replaceAll("{{PRESENTACION}}", isFirstReply
+      ? "Es tu primera respuesta en este chat: presentate en una frase como el asistente virtual de la inmobiliaria."
+      : "Ya hablaste antes en este chat: no te vuelvas a presentar ni a saludar de nuevo.");
 }
 
 // ───────────────────────── Verificador ─────────────────────────
