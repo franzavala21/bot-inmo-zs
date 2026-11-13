@@ -183,5 +183,5 @@
 - Lo decide el código (`nextFollowUp`): saltea lo que ya sabe (ficha del lead, lo que dijo, nombre confiable) y lo que ya preguntó (bitácora `follow_up`). Los dueños descartaron preguntar por la escritura.
 - Ficha: nuevo campo `purpose` (migración `0007_lead_purpose.sql`).
 - Verificador: una objeción `dato_no_respaldado` sobre una pregunta al cliente se descarta en código. Regla 17 del redactor: crédito o contado es cómo paga el cliente, no una característica de la propiedad.
-- [ ] Aplicar `0007_lead_purpose.sql` ANTES de desplegar (`run-turn` lee `lead_profiles.purpose`).
+- [x] `0007_lead_purpose.sql` aplicada.
 - `bot-try`: 26 casos (nuevos: `anuncio`, `seguimiento`). `califica_no_sabe` a veces deriva por el verificador (falla a favor de derivar).
