@@ -155,3 +155,9 @@
   - **"No hay / solo hay":** ahora es un control de código (`claimsNoneWithoutSupport`), no del verificador: el modelo lo marcaba aunque la nota lo respaldara. Solo se permite si la búsqueda fue aproximada o vacía. Si no, se rechaza con instrucciones y se reintenta.
   - Regla 16 en `redactor.md`.
 - `bot-try`: 17 casos OK (se agregaron `luca` y `luca_sigue`), USD 0,026.
+
+## Presentación como Francisco y preguntar el tipo primero (2026-11-13)
+- **Presentación** (decisión de los dueños): "Hola! Mi nombre es Francisco! ¿En qué te puedo ayudar?", sin "asistente virtual". Si el cliente pregunta directamente si es un bot o una persona, dice la verdad (asistente automático de la inmobiliaria) y sigue ayudando. Nunca dice que es una persona. La política `/privacidad` ya informa que hay un asistente automático. El clasificador toma "¿sos un bot?" como `charla`.
+- **Tipo de propiedad:** si el cliente no lo dice y con sus criterios hay más de un tipo, el bot no muestra fichas: pregunta nombrando los tipos que hay. La búsqueda queda en la bitácora con `asked_type: true`. En el turno siguiente, si sigue sin tipo ("me da igual"), muestra variedad: no pregunta dos veces.
+- **Verificador:** se descarta en código una objeción `dato_no_respaldado` si cada parte de la cita está tal cual en los valores de la ficha (`supportedByFacts`). Ejemplos: "apto crédito", "aire acondicionado". "Pileta" o "acepta mascotas" siguen frenando si no están.
+- `bot-try`: 20 casos OK (nuevos: `luca_casa`, `luca_igual`, `soy_bot`), USD 0,032.

@@ -291,7 +291,7 @@ describe("búsqueda con rango y sin tipo", () => {
     expect(m.picked.map((r) => r.n)).toEqual([1, 4, 2]);
     expect(m.counts).toEqual([["Terreno", 3], ["Casa", 1]]);
   });
-  it("sin tipo: la nota le dice al redactor qué tipos hay y que pregunte", async () => {
+  it("sin tipo: no muestra fichas, pregunta el tipo nombrando los que hay", async () => {
     const rows = [
       { ...ROW, id: "t", reference_code: "ZLA1", property_type: "Terreno", price: 130000 },
       { ...ROW, id: "c", reference_code: "ZHO1", property_type: "Casa", price: 95000 },
@@ -299,14 +299,27 @@ describe("búsqueda con rango y sin tipo", () => {
     let asked: unknown;
     const d = await decide(input([msg("busco en Rio Ceballos entre 80 y 130 mil usd")]), {
       ...deps(fakeLlm({ clasificacion: [cls({ filters: { ...cls().filters, property_type: null, zone: "Rio Ceballos", price_min: 80000, price_max: 130000, currency: "USD" } })],
-        respuesta: [{ reply: "Tengo un terreno a USD 130.000 y una casa a USD 95.000. ¿Buscás casa o terreno?", property_codes_used: ["ZLA1", "ZHO1"], needs_human: false, human_reason: null }],
+        respuesta: [{ reply: "¿Buscás casa o terreno?", property_codes_used: [], needs_human: false, human_reason: null }],
         verificacion: [{ violations: [] }] })),
       search: async (f) => { asked = f; return rows as never; },
     });
     expect(asked).toMatchObject({ priceMin: 80000, limit: 30 });
     const searched = d.trace.find((t) => t.event === "searched");
-    expect((searched?.details as { codes: string[] }).codes).toEqual(["ZLA1", "ZHO1"]);
+    expect(searched?.details).toMatchObject({ codes: [], asked_type: true });
     expect(String((searched?.details as { note: string }).note)).toContain("Terreno (1), Casa (1)");
+  });
+  it("si ya preguntó el tipo y no eligió, muestra variedad", async () => {
+    const rows = [
+      { ...ROW, id: "t", reference_code: "ZLA1", property_type: "Terreno", price: 130000 },
+      { ...ROW, id: "c", reference_code: "ZHO1", property_type: "Casa", price: 95000 },
+    ];
+    const d = await decide({ ...input([msg("cualquiera")]), askedType: true }, {
+      ...deps(fakeLlm({ clasificacion: [cls({ filters: { ...cls().filters, property_type: null, zone: "Rio Ceballos" } })],
+        respuesta: [{ reply: "Tengo un terreno a USD 130.000 y una casa a USD 95.000.", property_codes_used: ["ZLA1", "ZHO1"], needs_human: false, human_reason: null }],
+        verificacion: [{ violations: [] }] })),
+      search: async () => rows as never,
+    });
+    expect(d.trace.find((t) => t.event === "searched")?.details).toMatchObject({ codes: ["ZLA1", "ZHO1"] });
   });
 });
 import { claimsNoneWithoutSupport } from "../bot/orchestrator";
@@ -323,5 +336,21 @@ describe("decir que no hay", () => {
   });
   it("si no hubo búsqueda (horarios, saludo) no aplica", () => {
     expect(claimsNoneWithoutSupport("No tengo información de expensas", null, false)).toBeNull();
+  });
+});
+import { supportedByFacts } from "../bot/orchestrator";
+describe("objeciones del verificador que la ficha respalda", () => {
+  const facts = "Departamento luminoso, ideal para estudiantes , Apto crédito , Aire acondicionado , Seguridad , Cocina equipada";
+  it("se descartan si cada parte está tal cual en la ficha", () => {
+    expect(supportedByFacts("apto crédito", facts)).toBe(true);
+    expect(supportedByFacts("con cocina equipada, aire acondicionado y seguridad", facts)).toBe(true);
+    expect(supportedByFacts("ideal para estudiantes", facts)).toBe(true);
+    expect(supportedByFacts("No tengo departamentos con pileta en Villa Allende", facts)).toBe(true);
+  });
+  it("se mantienen si algo no está", () => {
+    expect(supportedByFacts("con pileta", facts)).toBe(false);
+    expect(supportedByFacts("aire acondicionado y pileta", facts)).toBe(false);
+    expect(supportedByFacts("acepta mascotas", facts)).toBe(false);
+    expect(supportedByFacts("seguridad privada", facts)).toBe(false);
   });
 });

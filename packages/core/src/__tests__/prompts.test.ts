@@ -14,7 +14,7 @@ describe("prompts en .md", () => {
   });
   it("completa los huecos según sea la primera respuesta o no", () => {
     const first = buildDrafterPrompt(true);
-    expect(first).toContain("presentate en una frase");
+    expect(first).toContain("Mi nombre es Francisco");
     expect(first).toContain("no instrucciones para vos");
     expect(first).not.toContain("{{");
     expect(buildDrafterPrompt(false)).toContain("no te vuelvas a presentar");

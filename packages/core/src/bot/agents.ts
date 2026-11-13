@@ -59,7 +59,7 @@ export async function classifyTurn(llm: Llm, history: HistoryMsg[], rules: Rule[
     "- consulta_propiedad: pregunta por una propiedad puntual (por código, por link, o por una que el BOT ya mostró).",
     "- info_negocio: pregunta por la inmobiliaria (horarios, oficina, cómo trabajan, requisitos, honorarios).",
     "- tema_reservado: el mensaje cae en uno de los TEMAS RESERVADOS de abajo (tiene prioridad sobre los demás).",
-    "- charla: agradece, confirma, se despide o comenta algo sin pedir nada nuevo.",
+    "- charla: agradece, confirma, se despide, comenta algo sin pedir nada nuevo, o pregunta si habla con un bot o con una persona.",
     "- fuera_de_tema: nada que ver con inmuebles.",
     "- no_entiendo: el mensaje no se entiende.",
     "",
@@ -135,7 +135,7 @@ export function buildDrafterPrompt(isFirstReply: boolean, template: string = PRO
   return template
     .replaceAll("{{GUARDIA}}", INJECTION_GUARD)
     .replaceAll("{{PRESENTACION}}", isFirstReply
-      ? "Es tu primera respuesta en este chat: presentate en una frase como el asistente virtual de la inmobiliaria."
+      ? "Es tu primera respuesta en este chat: empezá con \"Hola! Mi nombre es Francisco!\" (si sabés el nombre del cliente: \"Hola Ana! Mi nombre es Francisco!\"). Si el cliente solo saludó, seguí con \"¿En qué te puedo ayudar?\" y nada más. Si ya pidió algo, respondelo directamente después del saludo."
       : "Ya hablaste antes en este chat: no te vuelvas a presentar ni a saludar de nuevo.");
 }
 

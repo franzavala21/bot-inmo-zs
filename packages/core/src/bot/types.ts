@@ -42,6 +42,8 @@ export interface TurnInput {
   recentlyShown: PropertyFact[];
   /** Nombre de pila confiable del cliente (lo decide el código) o null. */
   clientName?: string | null;
+  /** En el turno anterior el bot preguntó qué tipo de propiedad busca (para no preguntar dos veces). */
+  askedType?: boolean;
 }
 
 export interface TraceEntry { event: string; summary: string; details?: Record<string, unknown> }

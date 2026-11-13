@@ -45,6 +45,35 @@ export function claimsNoneWithoutSupport(reply: string, searchNote: string | nul
   return m ? m[0] : null;
 }
 
+const LEAD_WORDS = new Set(["con", "y", "e", "es", "son", "tiene", "tienen", "cuenta", "incluye", "ideal", "muy", "un", "una", "el", "la", "los", "las"]);
+/**
+ * El verificador a veces marca como "dato no respaldado" algo que está tal cual en la ficha ("apto crédito").
+ * Se descarta la objeción si CADA parte de la cita (separada por comas o "y") aparece seguida, palabra por palabra,
+ * en los valores de las fichas o de la info del negocio. Los "no hay / no tengo" los controla claimsNoneWithoutSupport.
+ */
+export function supportedByFacts(quote: string, factsText: string): boolean {
+  const n = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9ñ ,]+/g, " ").replace(/\s+/g, " ").trim();
+  const q = n(quote);
+  if (/\b(no (tengo|hay|tenemos|cuento|dispongo)|con exactamente eso no)\b/.test(q)) return true;
+  const facts = ` ${n(factsText).replace(/,/g, " ")} `;
+  const parts = q.split(/,| y /).map((p) => p.trim().split(" ").filter(Boolean)).map((w) => {
+    while (w.length && LEAD_WORDS.has(w[0])) w.shift();
+    return w.join(" ");
+  }).filter((p) => p.length >= 3);
+  return parts.length > 0 && parts.every((p) => facts.includes(` ${p} `));
+}
+
+/** Texto de los VALORES de las fichas y la info del negocio (sin nombres de campos ni mascotas, que es sí/no). */
+function factsValues(properties: PropertyFact[], info: { title: string; body: string }[]): string {
+  const vals: string[] = [];
+  for (const p of properties) for (const [k, v] of Object.entries(p)) {
+    if (k === "mascotas" || v == null) continue;
+    vals.push(Array.isArray(v) ? v.join(" , ") : String(v));
+  }
+  for (const b of info) vals.push(b.title, b.body);
+  return vals.join(" , ");
+}
+
 export function impliesHandoff(reply: string): string | null {
   if (PROMISES_HUMAN.test(reply)) return "La respuesta le dice al cliente que sigue una persona del equipo";
   if (LACKS_DATA.test(reply)) return "El cliente pidió un dato que el bot no tiene";
@@ -155,6 +184,7 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
   let properties: PropertyFact[] = [];
   let searchNote: string | null = null;
   let didSearch = false;
+  let askedType = false;
   if (c.intent === "busqueda" || c.intent === "consulta_propiedad") {
     if (c.property_code) {
       const row = await deps.byCode(c.property_code.trim());
@@ -180,18 +210,24 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
         if (!rows.length) continue;
         if (step.filters.propertyType) { properties = rows.map(toFact); searchNote = step.note; break; }
         const mix = mixByType(rows);
-        properties = mix.picked.map(toFact);
         const types = mix.counts.map(([t, n]) => `${t} (${n}${n >= 30 ? " o más" : ""})`).join(", ");
+        if (mix.counts.length > 1 && !input.askedType) {
+          // Decisión de los dueños: si hay más de un tipo, primero se pregunta cuál busca y después se muestran fichas.
+          askedType = true;
+          searchNote = `El cliente no dijo qué tipo de propiedad busca. Con esos criterios hay: ${types}. No muestres fichas todavía: preguntale qué tipo busca, nombrando esos tipos.`;
+          break;
+        }
+        properties = mix.picked.map(toFact);
         searchNote = [step.note, mix.counts.length > 1
-          ? `El cliente no dijo qué tipo de propiedad busca. Con esos criterios hay: ${types}. Mostrá estas de muestra y preguntale qué tipo prefiere.`
+          ? `Ya se le preguntó el tipo y no lo eligió. Con esos criterios hay: ${types}. Mostrá estas de muestra.`
           : null].filter(Boolean).join(" ") || null;
         break;
       }
-      if (!properties.length) searchNote = "No hay propiedades disponibles con esos criterios ni parecidas.";
+      if (!properties.length && !askedType) searchNote = "No hay propiedades disponibles con esos criterios ni parecidas.";
     }
     trace.push({ event: "searched", summary: properties.length
       ? `Encontró ${properties.length} propiedad(es)${searchNote ? " (aproximado)" : ""}`
-      : "No encontró propiedades", details: { codes: properties.map((p) => p.codigo), note: searchNote } });
+      : askedType ? "Preguntó qué tipo de propiedad busca" : "No encontró propiedades", details: { codes: properties.map((p) => p.codigo), note: searchNote, ...(askedType ? { asked_type: true } : {}) } });
   }
 
   // ── Redactor → control numérico → verificador (un reintento) ──
@@ -248,9 +284,11 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       .filter((x) => { const q = norm(x.quote); return q.length >= 3 && replyNorm.includes(q); })
       // Una "dirección" sin número ni palabra de calle es una zona o un barrio: eso se puede decir.
       .filter((x) => x.rule !== "direccion_exacta" || looksLikeAddress(x.quote))
+      // "Dato no respaldado" que está tal cual en la ficha: el verificador se equivocó.
+      .filter((x) => x.rule !== "dato_no_respaldado" || !supportedByFacts(x.quote, factsValues(properties, input.businessInfo)))
       .map((x) => `${x.rule}: «${x.quote.trim()}»`);
     const ignored = v.violations.length - violations.length;
-    if (ignored) trace.push({ event: "verifier_ignored", summary: `El verificador citó ${ignored} fragmento(s) que no están en la respuesta: se ignoran`, details: { attempt, ignored: v.violations.slice(0, 5) } });
+    if (ignored) trace.push({ event: "verifier_ignored", summary: `Se ignoran ${ignored} objeción(es) del verificador: la cita no está en la respuesta o el dato está en la ficha`, details: { attempt, ignored: v.violations.slice(0, 5) } });
     if (violations.length) {
       trace.push({ event: "rejected_verifier", summary: "El verificador rechazó la respuesta", details: { attempt, problems: violations.slice(0, 5) } });
       feedback = violations.slice(0, 5);
