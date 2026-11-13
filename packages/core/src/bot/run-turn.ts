@@ -5,6 +5,7 @@ import { PUBLIC_COLUMNS, searchProperties } from "../retrieval/search";
 import { toFact, type PublicRow } from "./facts";
 import { addUsage, emptyUsage, OpenAiLlm, type Llm, type Usage } from "./llm";
 import { decide, PHRASES } from "./orchestrator";
+import { clientFirstName } from "./name";
 import { OpenAiTranscriber, type Transcriber } from "./transcribe";
 import type { BusinessInfo, HistoryMsg, Rule, TraceEntry } from "./types";
 
@@ -53,7 +54,7 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
   let usage: Usage = emptyUsage();
   try {
     const { data: conv, error: convErr } = await db.from("conversations")
-      .select("contact_id, channel:channels(operation)").eq("id", conversationId).single();
+      .select("contact_id, channel:channels(operation), contact:contacts(name, display_name)").eq("id", conversationId).single();
     if (convErr || !conv) throw new Error("conversación no encontrada");
     const channelOperation = ((conv.channel as unknown as { operation: "sale" | "rent" } | null)?.operation) ?? "sale";
 
@@ -94,12 +95,15 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
     }));
 
     // ── Reglas, info del negocio y fichas ya mostradas ──
-    const [{ data: rv }, { data: bi }, { data: lastSent }] = await Promise.all([
+    const [{ data: rv }, { data: bi }, { data: lastSent }, { data: lead }] = await Promise.all([
       db.from("rules_versions").select("rules").eq("published", true).order("version", { ascending: false }).limit(1).maybeSingle(),
       db.from("business_info").select("key, title, body").neq("body", "").order("sort"),
       db.from("audit_log").select("details").eq("conversation_id", conversationId).in("event", ["sent", "sent_handoff"])
         .order("created_at", { ascending: false }).limit(3),
+      db.from("lead_profiles").select("name").eq("contact_id", conv.contact_id).maybeSingle(),
     ]);
+    const contact = conv.contact as unknown as { name: string | null; display_name: string | null } | null;
+    const clientName = clientFirstName({ name: contact?.name, profileName: (lead?.name as { value?: string } | null)?.value, displayName: contact?.display_name });
     const shownCodes = [...new Set((lastSent ?? []).flatMap((a) => ((a.details as { property_codes?: string[] } | null)?.property_codes ?? [])))].slice(0, 3);
     let recentlyShown: ReturnType<typeof toFact>[] = [];
     if (shownCodes.length) {
@@ -109,7 +113,7 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
 
     const llm = opts.llm ?? new OpenAiLlm();
     const decision = await decide(
-      { history, channelOperation, rules: (rv?.rules ?? []) as Rule[], businessInfo: (bi ?? []) as BusinessInfo[], recentlyShown },
+      { history, channelOperation, rules: (rv?.rules ?? []) as Rule[], businessInfo: (bi ?? []) as BusinessInfo[], recentlyShown, clientName },
       {
         llm,
         search: async (f) => (await searchProperties(db, f)) as unknown as PublicRow[],

@@ -10,6 +10,9 @@ import type { HistoryMsg, Rule } from "../src/bot/types";
 const c = (text: string): HistoryMsg => ({ author: "client", kind: "text", text, at: new Date().toISOString() });
 const b = (text: string): HistoryMsg => ({ author: "ai", kind: "text", text, at: new Date().toISOString() });
 
+// Casos con nombre de pila conocido (el resto, sin nombre: el bot no tiene que usar ninguno).
+const NAMES: Record<string, string> = { saludo: "Martina", busqueda: "Pedro" };
+
 const CASES: Record<string, HistoryMsg[]> = {
   saludo: [c("Hola buenas tardes")],
   busqueda: [c("Hola! Busco casa en Salsipuedes de 2 dormitorios, hasta 70 mil dólares")],
@@ -38,7 +41,7 @@ async function main() {
     if (only && name !== only) continue;
     const t0 = Date.now();
     const d = await decide(
-      { history, channelOperation: "sale", rules: (rv?.rules ?? []) as Rule[], businessInfo: [], recentlyShown: [] },
+      { history, channelOperation: "sale", rules: (rv?.rules ?? []) as Rule[], businessInfo: [], recentlyShown: [], clientName: NAMES[name] ?? null },
       {
         llm,
         search: async (f) => (await searchProperties(db, f)) as unknown as PublicRow[],

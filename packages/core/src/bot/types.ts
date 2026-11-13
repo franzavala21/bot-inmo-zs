@@ -40,6 +40,8 @@ export interface TurnInput {
   businessInfo: BusinessInfo[];
   /** Fichas que el bot ya mostró en este chat (para "¿y la casa de antes?"). */
   recentlyShown: PropertyFact[];
+  /** Nombre de pila confiable del cliente (lo decide el código) o null. */
+  clientName?: string | null;
 }
 
 export interface TraceEntry { event: string; summary: string; details?: Record<string, unknown> }

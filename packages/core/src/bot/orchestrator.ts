@@ -171,7 +171,7 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
     let d;
     try {
       const r = await draftReply(deps.llm, { history: input.history, intent: c.intent, properties, searchNote,
-        businessInfo: input.businessInfo, isFirstReply, feedback });
+        businessInfo: input.businessInfo, isFirstReply, clientName: input.clientName ?? null, feedback });
       d = r.data; usage = addUsage(usage, r.usage);
     } catch (e) {
       trace.push({ event: "agent_error", summary: "El redactor falló", details: { error: (e as Error).message.slice(0, 200) } });

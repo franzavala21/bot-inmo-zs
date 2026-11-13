@@ -21,3 +21,4 @@ export * from "./leads/profile";
 export * from "./leads/score";
 export * from "./leads/run";
 export * from "./web/site-links";
+export * from "./bot/name";

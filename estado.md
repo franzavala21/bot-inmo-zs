@@ -139,4 +139,10 @@
 - La web arma `/propiedad/<texto>-<id Tokko>/` y el texto tiene que ser exacto (si no, 404). Por eso cada sincronización lee el sitemap (`src/web/site-links.ts`) y guarda `properties.web_url`. Si el sitemap falla, los links quedan como estaban.
 - `toFact`: `link = web_url || public_url`. Si una propiedad nueva todavía no está en la web, va la ficha.
 - Verificado el 2026-11-13: 77 de 77 propiedades activas tienen página en la web.
-- [ ] Aplicar `0006_web_url.sql` ANTES de desplegar el código (la búsqueda pide la columna `web_url`).
+- [x] `0006_web_url.sql` aplicada; 77 de 77 links cargados.
+
+## Nombre del cliente (2026-11-13)
+- El redactor recibe `NOMBRE DEL CLIENTE` (o "desconocido"). Lo decide el código (`src/bot/name.ts`), en este orden: `contacts.name`, el nombre que dijo en el chat (ficha del lead), el nombre de perfil de WhatsApp.
+- Se usa solo el nombre de pila y solo si parece un nombre: una palabra de letras, sin siglas ni apodos tipo "Mami", ni palabras como "Inmobiliaria". Si no hay uno confiable, no se usa ninguno.
+- Límite: un perfil cuya primera palabra sea una palabra común ("Ignorá…") pasa como nombre. No es un riesgo de seguridad, porque solo llega una palabra.
+- `bot-try`: 15 casos OK con nombre y sin nombre (USD 0,021). Las respuestas ya llevan el link de la web.
