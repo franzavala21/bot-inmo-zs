@@ -172,3 +172,16 @@
 - Decir "voy con crédito" ya no es tema reservado. Pedir asesoramiento (bancos, montos, trámites) sigue derivando.
 - **Dato:** solo 6 de 69 propiedades en venta dicen "apto crédito" en la ficha y no hay etiqueta en Tokko. Conviene marcarlo en Tokko.
 - `bot-try`: 24 casos, nuevos `califica*`.
+
+## Preguntas de seguimiento (2026-11-13)
+- Decisión de los dueños: después de mostrar propiedades, el bot cierra cada respuesta con UNA pregunta de seguimiento, en este orden:
+  1. Crédito o contado (solo viviendas; para cuando preguntó por una propiedad puntual y no pasó por la calificación).
+  2. Si tiene que vender algo para comprar.
+  3. Para qué la busca: vivir, fines de semana o inversión.
+  4. Dormitorios (solo viviendas).
+  5. Nombre.
+- Lo decide el código (`nextFollowUp`): saltea lo que ya sabe (ficha del lead, lo que dijo, nombre confiable) y lo que ya preguntó (bitácora `follow_up`). Los dueños descartaron preguntar por la escritura.
+- Ficha: nuevo campo `purpose` (migración `0007_lead_purpose.sql`).
+- Verificador: una objeción `dato_no_respaldado` sobre una pregunta al cliente se descarta en código. Regla 17 del redactor: crédito o contado es cómo paga el cliente, no una característica de la propiedad.
+- [ ] Aplicar `0007_lead_purpose.sql` ANTES de desplegar (`run-turn` lee `lead_profiles.purpose`).
+- `bot-try`: 26 casos (nuevos: `anuncio`, `seguimiento`). `califica_no_sabe` a veces deriva por el verificador (falla a favor de derivar).

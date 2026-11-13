@@ -9,7 +9,7 @@ import { computeSignals, scoreLead, type ScoringRule } from "./score";
 
 export const FIELD_LABEL: Record<LeadField, string> = {
   operation: "operación", zones: "zona", property_type: "tipo", budget_max: "presupuesto", budget_currency: "moneda",
-  rooms_min: "dormitorios", pets: "mascotas", timeframe: "plazo", financing: "forma de pago", name: "nombre", wants_visit: "visita",
+  rooms_min: "dormitorios", pets: "mascotas", timeframe: "plazo", financing: "forma de pago", name: "nombre", wants_visit: "visita", purpose: "para qué",
 };
 
 export function profileFromRow(row: Record<string, unknown> | null): { profile: Profile; conflicts: Conflict[] } {

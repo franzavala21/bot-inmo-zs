@@ -33,6 +33,9 @@ const CASES: Record<string, HistoryMsg[]> = {
   luca_casa: [c("Me gustaria averiguar para comprar una propiedad en Rio Ceballos, de entre 80k y 130k USD"), b("¿Buscás casa o terreno? En ese rango tengo de los dos."), c("casa")],
   luca_igual: [c("Me gustaria averiguar para comprar una propiedad en Rio Ceballos, de entre 80k y 130k USD"), b("¿Buscás casa o terreno? En ese rango tengo de los dos."), c("me da igual, lo que haya")],
   soy_bot: [c("Hola"), b("Hola! Mi nombre es Francisco! ¿En qué te puedo ayudar?"), c("sos un bot o una persona?")],
+  // Viene de un anuncio: pregunta por una propiedad puntual. Responde y cierra con la primera pregunta de seguimiento.
+  anuncio: [c("Hola! Quiero más información sobre la casa ZHO4763673")],
+  seguimiento: [c("Busco casa en Salsipuedes hasta 100 mil dólares, de contado")],
   // Calificación: antes de mostrar, presupuesto y (si es vivienda) crédito.
   califica: [c("Hola, busco casa en Salsipuedes")],
   califica_credito: [c("Hola, busco casa en Salsipuedes"), b("¿Con qué presupuesto contás y la comprarías con crédito hipotecario o de contado?"), c("hasta 90 mil dólares, con crédito")],

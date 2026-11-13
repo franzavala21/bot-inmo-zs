@@ -119,6 +119,29 @@ export function qualifyGaps(f: Classification["filters"], type: string | null, a
   return gaps;
 }
 
+// ── Preguntas de seguimiento (decisión de los dueños): una por mensaje, solo después de mostrar propiedades ──
+export type FollowUp = "credit" | "sell" | "purpose" | "bedrooms" | "name";
+const FOLLOW_UPS: FollowUp[] = ["credit", "sell", "purpose", "bedrooms", "name"];
+export const FOLLOW_UP_QUESTION: Record<FollowUp, string> = {
+  credit: "si la compraría con crédito hipotecario o de contado",
+  sell: "si tiene que vender alguna propiedad para poder comprar",
+  purpose: "si la busca para vivir, para fines de semana o como inversión",
+  bedrooms: "cuántos dormitorios necesita",
+  name: "cómo se llama",
+};
+/** La próxima pregunta que falta: saltea lo que ya se sabe y lo que ya se preguntó en este chat. */
+export function nextFollowUp(k: { financing?: string | null; purpose?: string | null; bedrooms?: boolean; hasName: boolean; housing: boolean; credit?: string }, asked: Set<string>): FollowUp | null {
+  const known: Record<FollowUp, boolean> = {
+    // Crédito: solo viviendas (si pregunta por un aviso puntual no pasó por la calificación previa).
+    credit: !k.housing || k.credit === "credito" || k.credit === "contado" || !!k.financing,
+    sell: k.financing === "cash" || k.financing === "needs_to_sell", // con crédito igual puede necesitar vender
+    purpose: !!k.purpose,
+    bedrooms: !k.housing || !!k.bedrooms, // para terrenos no se pregunta
+    name: k.hasName,
+  };
+  return FOLLOW_UPS.find((q) => !known[q] && !asked.has(q)) ?? null;
+}
+
 export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { filters: SearchFilters; note: string | null }[] {
   const f = c.filters;
   const type = f.property_type ? normalize(f.property_type) : undefined;
@@ -207,6 +230,7 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
   }
 
   // ── Datos: búsqueda por código ──
+  const type = c.filters.property_type ? normalize(c.filters.property_type) : null;
   let properties: PropertyFact[] = [];
   let searchNote: string | null = null;
   let didSearch = false;
@@ -226,7 +250,6 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       searchNote = "Son las fichas que el bot ya mostró en este chat.";
     }
     const f = c.filters;
-    const type = f.property_type ? normalize(f.property_type) : null;
     const hasCriteria = !!(f.property_type || f.zone || f.rooms_min || f.bedrooms_min || f.price_max || f.price_min || f.keywords || f.pets || f.credit === "credito" || f.credit === "contado");
     if (!properties.length && c.intent === "busqueda" && !hasCriteria) {
       searchNote = "El cliente todavía no dio ningún criterio: no se buscó. Preguntale qué tipo de propiedad y en qué zona.";
@@ -270,6 +293,16 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
 
   // ── Redactor → control numérico → verificador (un reintento) ──
   const isFirstReply = !input.history.some((m) => m.author === "ai");
+  // Pregunta de seguimiento: si esta respuesta muestra propiedades, o si es charla después de haberlas mostrado.
+  const showing = properties.length > 0 || (c.intent === "charla" && input.recentlyShown.length > 0);
+  const shownTypes = (properties.length ? properties : input.recentlyShown).map((p) => normalize(p.tipo ?? ""));
+  const followUp = showing ? nextFollowUp({
+    financing: input.lead?.financing, purpose: input.lead?.purpose,
+    bedrooms: !!(c.filters.bedrooms_min || c.filters.rooms_min || input.lead?.rooms_min),
+    hasName: !!input.clientName,
+    credit: c.filters.credit,
+    housing: (type ? [type] : shownTypes).some((t) => CREDIT_TYPES.test(t)),
+  }, asked) : null;
   const clientTexts = input.history.filter((m) => m.author === "client").map((m) => m.text ?? "");
   const priorBotTexts = input.history.filter((m) => m.author === "ai" || m.author === "human").map((m) => m.text ?? "");
   let feedback: string[] = [];
@@ -278,7 +311,8 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
     let d;
     try {
       const r = await draftReply(deps.llm, { history: input.history, intent: c.intent, properties, searchNote,
-        businessInfo: input.businessInfo, isFirstReply, clientName: input.clientName ?? null, feedback });
+        businessInfo: input.businessInfo, isFirstReply, clientName: input.clientName ?? null,
+        closingQuestion: followUp ? FOLLOW_UP_QUESTION[followUp] : null, feedback });
       d = r.data; usage = addUsage(usage, r.usage);
     } catch (e) {
       trace.push({ event: "agent_error", summary: "El redactor falló", details: { error: (e as Error).message.slice(0, 200) } });
@@ -324,6 +358,8 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       .filter((x) => x.rule !== "direccion_exacta" || looksLikeAddress(x.quote))
       // "Dato no respaldado" que está tal cual en la ficha: el verificador se equivocó.
       .filter((x) => x.rule !== "dato_no_respaldado" || !supportedByFacts(x.quote, factsValues(properties, input.businessInfo)))
+      // Una pregunta al cliente no afirma ningún dato.
+      .filter((x) => x.rule !== "dato_no_respaldado" || !/^\s*¿|\?\s*$/.test(x.quote))
       .map((x) => `${x.rule}: «${x.quote.trim()}»`);
     const ignored = v.violations.length - violations.length;
     if (ignored) trace.push({ event: "verifier_ignored", summary: `Se ignoran ${ignored} objeción(es) del verificador: la cita no está en la respuesta o el dato está en la ficha`, details: { attempt, ignored: v.violations.slice(0, 5) } });
@@ -340,6 +376,7 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       if (implied && !d.needs_human) trace.push({ event: "handoff_forced", summary: `Se deriva por control de código: ${implied}` });
       return handoff(d.human_reason?.trim() || implied || (unreadable.length ? "Mandó algo que el bot no puede leer" : "El bot necesita a una persona"), reply, codes);
     }
+    if (followUp) trace.push({ event: "follow_up", summary: `Pregunta de seguimiento: ${FOLLOW_UP_QUESTION[followUp]}`, details: { asked: [followUp] } });
     return { action: "reply", body: reply, propertyCodes: codes, trace, usage };
   }
   return handoff("La respuesta del bot no pasó los controles dos veces");

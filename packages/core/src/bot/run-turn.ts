@@ -100,11 +100,11 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
       db.from("business_info").select("key, title, body").neq("body", "").order("sort"),
       db.from("audit_log").select("details").eq("conversation_id", conversationId).in("event", ["sent", "sent_handoff"])
         .order("created_at", { ascending: false }).limit(3),
-      db.from("lead_profiles").select("name").eq("contact_id", conv.contact_id).maybeSingle(),
+      db.from("lead_profiles").select("name, financing, purpose, rooms_min").eq("contact_id", conv.contact_id).maybeSingle(),
     ]);
     // Preguntas de calificación que el bot ya hizo en este chat (para no repetirlas).
     const { data: searches } = await db.from("audit_log").select("details").eq("conversation_id", conversationId)
-      .eq("event", "searched").order("created_at", { ascending: false }).limit(30);
+      .in("event", ["searched", "follow_up"]).order("created_at", { ascending: false }).limit(40);
     const asked = [...new Set((searches ?? []).flatMap((x) => {
       const d = x.details as { asked?: string[]; asked_type?: boolean } | null;
       return [...(d?.asked ?? []), ...(d?.asked_type ? ["type"] : [])];
@@ -120,7 +120,9 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
 
     const llm = opts.llm ?? new OpenAiLlm();
     const decision = await decide(
-      { history, channelOperation, rules: (rv?.rules ?? []) as Rule[], businessInfo: (bi ?? []) as BusinessInfo[], recentlyShown, clientName, asked },
+      { history, channelOperation, rules: (rv?.rules ?? []) as Rule[], businessInfo: (bi ?? []) as BusinessInfo[], recentlyShown, clientName, asked,
+        lead: { financing: (lead?.financing as { value?: string } | null)?.value ?? null, purpose: (lead?.purpose as { value?: string } | null)?.value ?? null,
+          rooms_min: (lead?.rooms_min as { value?: number } | null)?.value ?? null } },
       {
         llm,
         search: async (f) => (await searchProperties(db, f)) as unknown as PublicRow[],

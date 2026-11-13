@@ -29,3 +29,4 @@ CAMPOS:
 - financing: cómo piensa pagar una COMPRA, solo si lo afirma. "cash" si paga de contado o tiene el dinero; "needs_credit" si dice que necesita crédito o financiación; "needs_to_sell" si tiene que vender algo para comprar; "other" si describe otra forma concreta (permuta, cuotas con el dueño). Preguntas, bromas o dudas no cuentan: null.
 - name: el nombre con el que se presenta ("soy Juan", "me llamo Ana Pérez"). No uses el nombre de perfil de WhatsApp.
 - wants_visit: true si pide ir a ver o visitar una propiedad.
+- purpose: para qué la quiere. "vivienda" si es para vivir; "fin_de_semana" si es para fines de semana, vacaciones o descanso; "inversion" si es para invertir, alquilar o revender.

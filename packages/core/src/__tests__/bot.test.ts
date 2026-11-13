@@ -88,7 +88,7 @@ describe("orquestador", () => {
     expect(d.action).toBe("reply");
     if (d.action === "reply") { expect(d.body).toContain("59.000"); expect(d.propertyCodes).toEqual(["ZHO1"]); }
     expect(llm.calls).toEqual(["clasificacion", "respuesta", "verificacion"]);
-    expect(d.trace.map((t) => t.event)).toEqual(["classified", "searched", "drafted", "verified"]);
+    expect(d.trace.map((t) => t.event)).toEqual(["classified", "searched", "drafted", "verified", "follow_up"]);
   });
 
   it("tema reservado: frase fija de la regla, sin redactor, y a una persona", async () => {
@@ -383,5 +383,31 @@ describe("calificación del lead", () => {
     const plan = searchPlan(cls({ filters: { ...F, price_max: 100000, credit: "credito" } }), "sale");
     expect(plan[0].filters.text).toBe("apto credito");
     expect(plan[1].note).toContain("no digas que lo son");
+  });
+});
+
+// ───────── Preguntas de seguimiento ─────────
+import { nextFollowUp } from "../bot/orchestrator";
+describe("preguntas de seguimiento", () => {
+  const base = { hasName: false, housing: true };
+  it("orden: crédito, vender, para qué, dormitorios, nombre", () => {
+    expect(nextFollowUp(base, new Set())).toBe("credit");
+    expect(nextFollowUp(base, new Set(["credit"]))).toBe("sell");
+    expect(nextFollowUp(base, new Set(["credit", "sell"]))).toBe("purpose");
+    expect(nextFollowUp(base, new Set(["credit", "sell", "purpose"]))).toBe("bedrooms");
+    expect(nextFollowUp(base, new Set(["credit", "sell", "purpose", "bedrooms"]))).toBe("name");
+    expect(nextFollowUp(base, new Set(["credit", "sell", "purpose", "bedrooms", "name"]))).toBeNull();
+  });
+  it("saltea lo que ya se sabe", () => {
+    expect(nextFollowUp({ ...base, credit: "contado", financing: "cash", purpose: "vivienda", bedrooms: true, hasName: true }, new Set())).toBeNull();
+    expect(nextFollowUp({ ...base, financing: "needs_credit" }, new Set())).toBe("sell"); // con crédito igual puede tener que vender
+  });
+  it("terrenos: ni crédito ni dormitorios", () => {
+    expect(nextFollowUp({ hasName: false, housing: false }, new Set(["sell", "purpose"]))).toBe("name");
+  });
+  it("después de mostrar, la respuesta cierra con la pregunta y queda anotada", async () => {
+    const llm = fakeLlm({ clasificacion: [cls({ filters: { ...cls().filters, price_max: 100000, credit: "contado" } })], respuesta: [goodReply], verificacion: [{ violations: [] }] });
+    const d = await decide(input([msg("busco casa en Salsipuedes hasta 100 mil, de contado")]), deps(llm));
+    expect(d.trace.find((t) => t.event === "follow_up")?.details).toEqual({ asked: ["sell"] });
   });
 });
