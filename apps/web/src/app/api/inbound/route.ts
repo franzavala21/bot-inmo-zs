@@ -1,5 +1,5 @@
 import { after, NextResponse } from "next/server";
-import { adminClient, InboundPayload, notifyHandoff, runBotTurn, verify, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@inmo/core";
+import { adminClient, InboundPayload, notifyHandoff, runBotTurn, updateLead, verify, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@inmo/core";
 
 // El turno del bot corre después de responder al worker (after). Tope por si el modelo tarda.
 export const maxDuration = 60;
@@ -48,6 +48,8 @@ export async function POST(req: Request) {
       } catch (e) {
         console.error("[bot] conv=%s falló: %s", r.conversation_id, (e as Error).message);
       }
+      const lead = await updateLead(adminClient(), r.conversation_id, { messageId });
+      console.log("[lead] conv=%s resultado=%s", r.conversation_id, lead);
     });
   }
   return NextResponse.json(r);

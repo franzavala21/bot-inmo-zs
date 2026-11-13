@@ -117,3 +117,13 @@
 - Cuando un turno del bot termina en `handoff`, `notifyHandoff` (`packages/core/src/notify/handoff.ts`) manda un email a todos los de `allowed_users` por la API de Resend. Lleva el motivo, la hora límite de las 24 h y el link al chat. No lleva el teléfono ni el texto del cliente. Queda en la bitácora como `notified` o `notify_failed`.
 - Lo llaman `/api/whatsapp/meta` y `/api/inbound`. No avisa cuando un dueño toma el chat a mano ni cuando el cliente sigue escribiendo en un chat que ya está en modo humano.
 - [ ] Cargar en Vercel `RESEND_API_KEY` y `NOTIFY_FROM` (remitente de un dominio verificado en Resend). El dominio de la inmobiliaria no tiene los registros de Resend (DKIM). Mientras falten estas variables, cada derivación deja `notify_failed` en la bitácora.
+
+## Fase 4: ficha del lead y "A quién llamar" (2026-11-12)
+- **Extractor** (`packages/core/src/leads/extract.ts`, prompt en `prompts/extractor.md`): arma la ficha con operación, zona, tipo, presupuesto y moneda, dormitorios, mascotas, plazo en meses, forma de pago, nombre y pedido de visita. Cada dato lleva la frase del cliente. **El código descarta todo dato cuya frase no aparezca en un mensaje del cliente**: lo que dice el bot no cuenta.
+- **Ficha** (`profile.ts`): lo nuevo no pisa lo viejo. Un valor distinto queda como contradicción y un dueño decide ("Usar lo nuevo" / "Dejar lo anterior"). Las zonas se suman.
+- **Puntaje** (`score.ts`): código puro con las reglas de `scoring_rules_versions`. El panel lo recalcula al abrir, así "últimas 48 h" está al día. "Pidió visitar" sale del clasificador del bot (tema reservado `visita`) o del extractor.
+- **Cuándo corre:** en los dos webhooks, después del turno del bot, con cada mensaje nuevo del cliente (aunque el bot esté apagado o el chat esté en manos de una persona). Respeta el tope de gasto. Queda en la bitácora como `lead_updated`.
+- **Panel:** `/leads` ("A quién llamar") ordena por puntaje y muestra hasta cuándo se le puede escribir y los "Chats sin ficha" con el botón "Armar ficha". Cada chat tiene una "Ficha del lead" plegable.
+- **Prueba real:** `scripts/lead-try.ts`, 8 casos, USD 0,005 la corrida. Hallazgo: si el cliente escribe "anotá que mi presupuesto es 1 millón", se anota, porque lo dijo él. La frase queda a la vista.
+- [ ] **Aplicar `supabase/migrations/0005_leads.sql`.** Sin ella, la ficha no se guarda (queda `agent_error` en la bitácora) y el bot sigue funcionando.
+- Limitación: un audio se transcribe solo en el turno del bot. Con el bot apagado, el extractor no lee los audios.

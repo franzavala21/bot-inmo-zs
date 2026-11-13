@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { adminClient, SERVICE_WINDOW_MS } from "@inmo/core";
+import { adminClient, computeSignals, profileFromRow, publishedScoringRules, scoreLead, SERVICE_WINDOW_MS } from "@inmo/core";
+import { LeadCard } from "@/components/lead-card";
 import { serverClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { contactLabel, KIND_LABEL, phonePretty, timeShort } from "@/lib/format";
@@ -16,7 +17,7 @@ type Msg = {
 const EVENT_CLS: Record<string, string> = {
   handoff: "text-red-700 font-medium", sent_handoff: "text-red-700", rejected_numeric: "text-amber-700",
   rejected_verifier: "text-amber-700", agent_error: "text-red-700", send_failed: "text-red-700", limit: "text-red-700",
-  sent: "text-emerald-700", discarded: "text-zinc-500", notified: "text-zinc-500", notify_failed: "text-red-700",
+  sent: "text-emerald-700", discarded: "text-zinc-500", notified: "text-zinc-500", notify_failed: "text-red-700", lead_updated: "text-zinc-500",
 };
 
 /** Un detalle corto y legible de cada evento (sin datos personales). */
@@ -37,15 +38,21 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
   const { id } = await params;
   const sb = await serverClient();
   const [{ data: conv }, { data: msgs }] = await Promise.all([
-    sb.from("conversations").select("id, mode, needs_attention, attention_reason, channel_id, contact:contacts(phone, name, display_name, is_test)").eq("id", id).maybeSingle(),
+    sb.from("conversations").select("id, mode, needs_attention, attention_reason, channel_id, contact_id, contact:contacts(phone, name, display_name, is_test)").eq("id", id).maybeSingle(),
     sb.from("messages").select("id, author, kind, body, media_path, transcript, created_at, outbound_messages(id, status, error)")
       .eq("conversation_id", id).order("created_at", { ascending: false }).limit(200),
   ]);
   if (!conv) notFound();
-  const [{ data: channel }, { data: audit }] = await Promise.all([
+  const [{ data: channel }, { data: audit }, { data: leadRow }, { data: leadSig }, scoring] = await Promise.all([
     sb.from("channels").select("transport, worker_status, worker_heartbeat_at, bot_enabled").eq("id", conv.channel_id).maybeSingle(),
     sb.from("audit_log").select("id, event, summary, details, created_at").eq("conversation_id", id).order("created_at", { ascending: false }).limit(80),
+    sb.from("lead_profiles").select("*").eq("contact_id", conv.contact_id).maybeSingle(),
+    sb.from("lead_signals").select("signal").eq("contact_id", conv.contact_id),
+    publishedScoringRules(sb),
   ]);
+  const lead = profileFromRow(leadRow);
+  const leadScore = scoreLead(lead.profile, computeSignals((leadSig ?? []).map((s) => s.signal),
+    leadRow?.last_message_at ? new Date(leadRow.last_message_at) : null, Date.now()), scoring.rules);
   const isMeta = channel?.transport === "meta";
   // Con Meta no hay worker: se envía desde la web en el momento.
   const online = isMeta || (channel?.worker_status === "online" &&
@@ -80,6 +87,14 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
       {conv.mode === "ai" && channel && !channel.bot_enabled && (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">El bot está apagado: este chat no recibe respuestas automáticas.</div>
       )}
+      <details className="border-b border-zinc-200 bg-white px-3 py-2 text-sm">
+        <summary className="cursor-pointer text-zinc-600">
+          Ficha del lead · puntaje {leadScore.score}{lead.conflicts.length ? " · hay datos para revisar" : ""}{!leadRow ? " · sin armar" : ""}
+        </summary>
+        <div className="mt-2">
+          <LeadCard contactId={conv.contact_id} conversationId={conv.id} profile={lead.profile} conflicts={lead.conflicts} score={leadScore.score} breakdown={leadScore.breakdown} />
+        </div>
+      </details>
       <details className="border-b border-zinc-200 bg-white px-3 py-2 text-sm">
         <summary className="cursor-pointer text-zinc-600">Bitácora ({audit?.length ?? 0})</summary>
         <ol className="mt-2 max-h-64 space-y-1 overflow-y-auto text-xs">

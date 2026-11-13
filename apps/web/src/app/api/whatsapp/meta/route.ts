@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import {
   adminClient, channelByPhoneNumberId, drainForConversation, ingestMetaInbound, MetaClient, metaConfigFromEnv,
-  META_SIGNATURE_HEADER, notifyHandoff, parseMetaWebhook, runBotTurn, verifyMetaSignature,
+  META_SIGNATURE_HEADER, notifyHandoff, parseMetaWebhook, runBotTurn, updateLead, verifyMetaSignature,
 } from "@inmo/core";
 
 // Webhook de la API oficial de WhatsApp (Meta). Público en el middleware: lo protege la firma con el App Secret.
@@ -74,6 +74,9 @@ export async function POST(req: Request) {
         console.error("[meta] envío falló conv=%s: %s", t.conv, (e as Error).message.slice(0, 160)); return null;
       });
       if (sent) console.log("[meta] cola conv=%s enviados=%d fallidos=%d", t.conv, sent.sent, sent.failed);
+      // Ficha y puntaje del lead: corre siempre (también con el bot apagado o el chat en manos de una persona).
+      const lead = await updateLead(adminClient(), t.conv, { messageId: t.msg });
+      console.log("[lead] conv=%s resultado=%s", t.conv, lead);
     });
   }
   return NextResponse.json({ ok: true });

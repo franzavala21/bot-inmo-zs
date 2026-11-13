@@ -17,7 +17,7 @@ export async function sendReply(conversationId: string, body: string): Promise<{
   if (meta) {
     const last = await lastClientMessageAt(db, conversationId);
     if (!last || Date.now() - last.getTime() > SERVICE_WINDOW_MS) {
-      return { ok: false, error: "Pasaron más de 24 h desde el último mensaje del cliente: WhatsApp no deja mandar texto libre. Escribile desde el teléfono." };
+      return { ok: false, error: "Pasaron más de 24 h desde el último mensaje del cliente: WhatsApp solo deja mandar plantillas aprobadas por Meta (todavía no están armadas)." };
     }
   }
   const { data: outId, error } = await db.rpc("human_reply", { p_conversation_id: conversationId, p_body: text, p_user: user.id });
