@@ -390,16 +390,17 @@ describe("calificación del lead", () => {
 import { nextFollowUp } from "../bot/orchestrator";
 describe("preguntas de seguimiento", () => {
   const base = { hasName: false, housing: true };
-  it("orden: crédito, vender, para qué, dormitorios, nombre", () => {
+  it("orden: crédito, vender, para qué, dormitorios, nombre, avisos", () => {
     expect(nextFollowUp(base, new Set())).toBe("credit");
     expect(nextFollowUp(base, new Set(["credit"]))).toBe("sell");
     expect(nextFollowUp(base, new Set(["credit", "sell"]))).toBe("purpose");
     expect(nextFollowUp(base, new Set(["credit", "sell", "purpose"]))).toBe("bedrooms");
     expect(nextFollowUp(base, new Set(["credit", "sell", "purpose", "bedrooms"]))).toBe("name");
-    expect(nextFollowUp(base, new Set(["credit", "sell", "purpose", "bedrooms", "name"]))).toBeNull();
+    expect(nextFollowUp(base, new Set(["credit", "sell", "purpose", "bedrooms", "name"]))).toBe("alerts");
+    expect(nextFollowUp(base, new Set(["credit", "sell", "purpose", "bedrooms", "name", "alerts"]))).toBeNull();
   });
   it("saltea lo que ya se sabe", () => {
-    expect(nextFollowUp({ ...base, credit: "contado", financing: "cash", purpose: "vivienda", bedrooms: true, hasName: true }, new Set())).toBeNull();
+    expect(nextFollowUp({ ...base, credit: "contado", financing: "cash", purpose: "vivienda", bedrooms: true, hasName: true, alerts: true }, new Set())).toBeNull();
     expect(nextFollowUp({ ...base, financing: "needs_credit" }, new Set())).toBe("sell"); // con crédito igual puede tener que vender
   });
   it("terrenos: ni crédito ni dormitorios", () => {

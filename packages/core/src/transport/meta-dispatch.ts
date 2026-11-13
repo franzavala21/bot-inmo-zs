@@ -1,7 +1,7 @@
 // Entrada y salida de un canal de Meta, desde la web (Vercel). Reemplaza al worker para estos canales.
 // Privacidad: los logs llevan solo ids, nunca teléfono ni texto.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MetaApiError, type MetaClient, type MetaInbound } from "./meta";
+import { MetaApiError, type MetaClient, type MetaInbound, type TemplateSend } from "./meta";
 
 export const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
 /** WhatsApp solo deja mandar texto libre hasta 24 h después del último mensaje del cliente. */
@@ -53,7 +53,7 @@ export async function ingestMetaInbound(db: SupabaseClient, client: MetaClient, 
   return data as { conversation_id: string; message_id: string | null; duplicate: boolean };
 }
 
-type Outbound = { id: string; conversation_id: string; to_phone: string; body: string; attempts: number };
+type Outbound = { id: string; conversation_id: string; to_phone: string; body: string; attempts: number; template?: TemplateSend | null };
 
 export async function lastClientMessageAt(db: SupabaseClient, conversationId: string): Promise<Date | null> {
   const { data } = await db.from("messages").select("created_at").eq("conversation_id", conversationId)
@@ -88,11 +88,17 @@ export async function drainMetaOutbound(
       res.failed++;
     };
     if (await isTestContact(db, job.conversation_id)) { await fail("contacto de prueba: no se envía por WhatsApp real", true); continue; }
-    const last = await lastClientMessageAt(db, job.conversation_id);
-    if (!last || now() - last.getTime() > SERVICE_WINDOW_MS) { await fail(WINDOW_CLOSED_ERROR, true); continue; }
+    // Texto libre solo dentro de las 24 h; una plantilla aprobada puede salir siempre (la aprobó un dueño).
+    if (!job.template) {
+      const last = await lastClientMessageAt(db, job.conversation_id);
+      if (!last || now() - last.getTime() > SERVICE_WINDOW_MS) { await fail(WINDOW_CLOSED_ERROR, true); continue; }
+    }
 
     try {
-      const wamid = await client.sendText(ch.meta_phone_number_id, job.to_phone.split("@")[0], job.body);
+      const to = job.to_phone.split("@")[0];
+      const wamid = job.template
+        ? await client.sendTemplate(ch.meta_phone_number_id, to, job.template)
+        : await client.sendText(ch.meta_phone_number_id, to, job.body);
       const { error: e2 } = await db.rpc("mark_outbound_result", { p_outbound_id: job.id, p_ok: true, p_wa_message_id: wamid, p_error: null });
       if (e2) console.error("[meta] salió pero no se pudo marcar outbound=%s", job.id);
       res.sent++;

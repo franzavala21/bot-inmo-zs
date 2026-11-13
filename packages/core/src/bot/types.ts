@@ -45,7 +45,7 @@ export interface TurnInput {
   /** Preguntas de calificación que el bot ya hizo en este chat ("type", "budget", "credit"): no se repiten. */
   asked?: string[];
   /** Lo que ya se sabe del lead por su ficha (para no preguntarlo de nuevo). */
-  lead?: { financing?: string | null; purpose?: string | null; rooms_min?: number | null };
+  lead?: { financing?: string | null; purpose?: string | null; rooms_min?: number | null; wants_alerts?: boolean | null };
 }
 
 export interface TraceEntry { event: string; summary: string; details?: Record<string, unknown> }

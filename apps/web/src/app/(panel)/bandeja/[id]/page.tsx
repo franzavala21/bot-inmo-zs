@@ -17,7 +17,7 @@ type Msg = {
 const EVENT_CLS: Record<string, string> = {
   handoff: "text-red-700 font-medium", sent_handoff: "text-red-700", rejected_numeric: "text-amber-700",
   rejected_verifier: "text-amber-700", agent_error: "text-red-700", send_failed: "text-red-700", limit: "text-red-700",
-  sent: "text-emerald-700", discarded: "text-zinc-500", notified: "text-zinc-500", notify_failed: "text-red-700", lead_updated: "text-zinc-500", suggested: "text-emerald-700",
+  sent: "text-emerald-700", discarded: "text-zinc-500", notified: "text-zinc-500", notify_failed: "text-red-700", lead_updated: "text-zinc-500", suggested: "text-emerald-700", match_found: "text-blue-700", proactive_approved: "text-emerald-700", proactive_discarded: "text-zinc-500", opt_out: "text-red-700", visit_scheduled: "text-blue-700", visit_updated: "text-zinc-600",
 };
 
 /** Un detalle corto y legible de cada evento (sin datos personales). */
@@ -83,7 +83,10 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
           <div className="truncate font-semibold">{contact ? contactLabel(contact) : "?"}</div>
           <div className="text-xs text-zinc-500">{contact ? phonePretty(contact.phone) : ""}{contact?.is_test ? " · prueba" : ""}</div>
         </div>
-        <ModeToggle conversationId={conv.id} mode={conv.mode} />
+        <div className="flex items-center gap-2">
+          <Link href={`/agenda?contacto=${conv.contact_id}`} className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm">Agendar visita</Link>
+          <ModeToggle conversationId={conv.id} mode={conv.mode} />
+        </div>
       </header>
       {conv.needs_attention && (
         <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{conv.attention_reason ?? "Necesita atención"}</div>

@@ -2,7 +2,7 @@ import { SERVICE_WINDOW_MS, type Evidence, type LeadField, type Profile } from "
 
 export const FIELD_TITLE: Record<LeadField, string> = {
   operation: "Operación", zones: "Zona", property_type: "Tipo", budget_max: "Presupuesto", budget_currency: "Moneda",
-  rooms_min: "Dormitorios", pets: "Mascotas", timeframe: "Plazo", financing: "Pago", name: "Nombre", wants_visit: "Visita", purpose: "Para qué",
+  rooms_min: "Dormitorios", pets: "Mascotas", timeframe: "Plazo", financing: "Pago", name: "Nombre", wants_visit: "Visita", purpose: "Para qué", wants_alerts: "Acepta avisos",
 };
 const FINANCING: Record<string, string> = { cash: "Contado", needs_credit: "Necesita crédito", needs_to_sell: "Tiene que vender antes", other: "Otra forma" };
 
@@ -19,13 +19,13 @@ export function showValue(field: LeadField, v: unknown, p?: Profile): string {
     case "timeframe": return Number(v) === 0 ? "Inmediato" : `En ${v} ${Number(v) === 1 ? "mes" : "meses"}`;
     case "financing": return FINANCING[v as string] ?? String(v);
     case "purpose": return ({ vivienda: "Para vivir", fin_de_semana: "Fin de semana", inversion: "Inversión" } as Record<string, string>)[v as string] ?? String(v);
-    case "pets": case "wants_visit": return v ? "Sí" : "No";
+    case "pets": case "wants_visit": case "wants_alerts": return v ? "Sí" : "No";
     default: return String(v);
   }
 }
 
 /** Los datos que se muestran en la lista (la moneda va dentro del presupuesto). */
-export const SHOWN_FIELDS: LeadField[] = ["name", "operation", "property_type", "zones", "budget_max", "rooms_min", "timeframe", "financing", "purpose", "pets"];
+export const SHOWN_FIELDS: LeadField[] = ["name", "operation", "property_type", "zones", "budget_max", "rooms_min", "timeframe", "financing", "purpose", "pets", "wants_alerts"];
 
 export function evidence(p: Profile, f: LeadField): Evidence | null { return p[f] ?? null; }
 

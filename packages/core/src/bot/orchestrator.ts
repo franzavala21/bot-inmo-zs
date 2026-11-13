@@ -120,17 +120,19 @@ export function qualifyGaps(f: Classification["filters"], type: string | null, a
 }
 
 // ── Preguntas de seguimiento (decisión de los dueños): una por mensaje, solo después de mostrar propiedades ──
-export type FollowUp = "credit" | "sell" | "purpose" | "bedrooms" | "name";
-const FOLLOW_UPS: FollowUp[] = ["credit", "sell", "purpose", "bedrooms", "name"];
+export type FollowUp = "credit" | "sell" | "purpose" | "bedrooms" | "name" | "alerts";
+const FOLLOW_UPS: FollowUp[] = ["credit", "sell", "purpose", "bedrooms", "name", "alerts"];
 export const FOLLOW_UP_QUESTION: Record<FollowUp, string> = {
   credit: "si la compraría con crédito hipotecario o de contado",
   sell: "si tiene que vender alguna propiedad para poder comprar",
   purpose: "si la busca para vivir, para fines de semana o como inversión",
   bedrooms: "cuántos dormitorios necesita",
   name: "cómo se llama",
+  // Permiso para avisos con plantilla (Meta exige que el cliente acepte recibirlos).
+  alerts: "si quiere que le avisemos por este WhatsApp cuando entre una propiedad parecida",
 };
 /** La próxima pregunta que falta: saltea lo que ya se sabe y lo que ya se preguntó en este chat. */
-export function nextFollowUp(k: { financing?: string | null; purpose?: string | null; bedrooms?: boolean; hasName: boolean; housing: boolean; credit?: string }, asked: Set<string>): FollowUp | null {
+export function nextFollowUp(k: { financing?: string | null; purpose?: string | null; bedrooms?: boolean; hasName: boolean; housing: boolean; credit?: string; alerts?: boolean | null }, asked: Set<string>): FollowUp | null {
   const known: Record<FollowUp, boolean> = {
     // Crédito: solo viviendas (si pregunta por un aviso puntual no pasó por la calificación previa).
     credit: !k.housing || k.credit === "credito" || k.credit === "contado" || !!k.financing,
@@ -138,6 +140,7 @@ export function nextFollowUp(k: { financing?: string | null; purpose?: string | 
     purpose: !!k.purpose,
     bedrooms: !k.housing || !!k.bedrooms, // para terrenos no se pregunta
     name: k.hasName,
+    alerts: k.alerts != null,
   };
   return FOLLOW_UPS.find((q) => !known[q] && !asked.has(q)) ?? null;
 }
@@ -301,6 +304,7 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
     bedrooms: !!(c.filters.bedrooms_min || c.filters.rooms_min || input.lead?.rooms_min),
     hasName: !!input.clientName,
     credit: c.filters.credit,
+    alerts: input.lead?.wants_alerts ?? null,
     housing: (type ? [type] : shownTypes).some((t) => CREDIT_TYPES.test(t)),
   }, asked) : null;
   const clientTexts = input.history.filter((m) => m.author === "client").map((m) => m.text ?? "");
@@ -358,6 +362,8 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       .filter((x) => x.rule !== "direccion_exacta" || looksLikeAddress(x.quote))
       // "Dato no respaldado" que está tal cual en la ficha: el verificador se equivocó.
       .filter((x) => x.rule !== "dato_no_respaldado" || !supportedByFacts(x.quote, factsValues(properties, input.businessInfo)))
+      // La pregunta de permiso para avisos la eligió el código: preguntar no es prometer.
+      .filter((x) => !(followUp === "alerts" && x.rule === "promesa_de_escribir_despues" && /\?\s*$/.test(x.quote)))
       // Una pregunta al cliente no afirma ningún dato.
       .filter((x) => x.rule !== "dato_no_respaldado" || !/^\s*¿|\?\s*$/.test(x.quote))
       .map((x) => `${x.rule}: «${x.quote.trim()}»`);

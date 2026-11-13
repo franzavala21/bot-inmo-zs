@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminClient, syncTokko } from "@inmo/core";
+import { adminClient, runMatcher, syncTokko } from "@inmo/core";
 
 export const maxDuration = 300;
 
@@ -10,8 +10,9 @@ export async function GET(req: Request) {
   }
   try {
     const result = await syncTokko(adminClient(), process.env.TOKKO_API_KEY!);
-    // Fase 5: si result.newPropertyIds.length > 0 → correr el matcher.
-    return NextResponse.json(result);
+    // Propiedades nuevas: buscar interesados y dejar avisos en borrador (los aprueba un dueño de a uno).
+    const matcher = await runMatcher(adminClient(), result.newPropertyIds);
+    return NextResponse.json({ ...result, matcher });
   } catch (e) {
     console.error("[tokko-sync] error", String(e));
     return NextResponse.json({ error: "falló la sincronización" }, { status: 500 });

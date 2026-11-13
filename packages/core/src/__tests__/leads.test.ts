@@ -7,7 +7,7 @@ import { mergeProfile, resolveConflict, type Profile } from "../leads/profile";
 import { computeSignals, scoreLead, type ScoringRule } from "../leads/score";
 
 const empty: ExtractedLead = { operation: null, zones: null, property_type: null, budget_max: null, budget_currency: null,
-  rooms_min: null, pets: null, timeframe: null, financing: null, name: null, wants_visit: null, purpose: null };
+  rooms_min: null, pets: null, timeframe: null, financing: null, name: null, wants_visit: null, purpose: null, wants_alerts: null };
 const h = (author: HistoryMsg["author"], text: string): HistoryMsg => ({ author, kind: "text", text, at: "2026-11-12T10:00:00Z" });
 const chat = [h("client", "Hola, soy Juan. Busco una casa en Unquillo"), h("ai", "¿Qué presupuesto tenés?"), h("client", "Hasta 100 mil dólares, lo antes posible")];
 

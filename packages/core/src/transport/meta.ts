@@ -26,7 +26,7 @@ const Msg = z.object({
   audio: Media.optional(), image: Media.optional(), video: Media.optional(), document: Media.optional(), sticker: Media.optional(),
   location: z.object({ latitude: z.number(), longitude: z.number(), name: z.string().optional(), address: z.string().optional() }).optional(),
   contacts: z.array(z.object({ name: z.object({ formatted_name: z.string().optional() }).optional() })).optional(),
-  button: z.object({ text: z.string() }).optional(),
+  button: z.object({ text: z.string(), payload: z.string().optional() }).optional(),
   interactive: z.object({
     button_reply: z.object({ title: z.string() }).optional(),
     list_reply: z.object({ title: z.string() }).optional(),
@@ -60,6 +60,8 @@ export interface MetaInbound {
   body: string | null;
   /** Id de Meta del archivo a bajar (solo audio e imagen, como con Baileys). */
   mediaId: string | null;
+  /** Payload del botón de una plantilla que tocó el cliente (ej. "OPT_OUT"), o null. */
+  buttonPayload?: string | null;
   sentAt: Date;
 }
 export interface MetaStatusFailure { waMessageId: string; error: string }
@@ -106,7 +108,7 @@ export function parseMetaWebhook(json: unknown): { inbound: MetaInbound[]; failu
       const ts = Number(m.timestamp);
       inbound.push({
         phoneNumberId, waMessageId: m.id, phone: digits(peer), displayName: fromMe ? null : clip(names.get(peer) ?? null, 100),
-        fromMe, kind: c.kind, body: c.body, mediaId: c.mediaId, sentAt: Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000) : new Date(),
+        fromMe, kind: c.kind, body: c.body, mediaId: c.mediaId, buttonPayload: m.button?.payload ?? null, sentAt: Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000) : new Date(),
       });
     };
     if (ch.field === "messages") for (const m of v.messages ?? []) add(m, false);
@@ -137,6 +139,9 @@ export function metaConfigFromEnv(env: NodeJS.ProcessEnv = process.env): MetaCon
   return { accessToken: env.META_ACCESS_TOKEN, graphVersion: env.META_GRAPH_VERSION || "v26.0" };
 }
 
+/** Plantilla a enviar (se guarda tal cual en outbound_messages.template). */
+export interface TemplateSend { name: string; language: string; params: string[]; buttons?: string[] }
+
 export class MetaClient {
   private f: typeof fetch;
   constructor(private cfg: MetaConfig) { this.f = cfg.fetchImpl ?? fetch; }
@@ -159,6 +164,24 @@ export class MetaClient {
     const json = await this.call(`${phoneNumberId}/messages`, {
       method: "POST",
       body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: digits(to), type: "text", text: { body, preview_url: false } }),
+    });
+    const id = json?.messages?.[0]?.id;
+    if (!id) throw new MetaApiError("meta: respuesta sin id de mensaje", null, 200);
+    return id;
+  }
+
+  /**
+   * Envía una plantilla aprobada (fuera de las 24 h). params = variables del cuerpo en orden;
+   * buttons = payloads de los botones de respuesta rápida en orden (para saber cuál tocó el cliente).
+   */
+  async sendTemplate(phoneNumberId: string, to: string, t: TemplateSend): Promise<string> {
+    const components: unknown[] = [];
+    if (t.params.length) components.push({ type: "body", parameters: t.params.map((text) => ({ type: "text", text })) });
+    (t.buttons ?? []).forEach((payload, i) => components.push({ type: "button", sub_type: "quick_reply", index: String(i), parameters: [{ type: "payload", payload }] }));
+    const json = await this.call(`${phoneNumberId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: digits(to), type: "template",
+        template: { name: t.name, language: { code: t.language }, components } }),
     });
     const id = json?.messages?.[0]?.id;
     if (!id) throw new MetaApiError("meta: respuesta sin id de mensaje", null, 200);

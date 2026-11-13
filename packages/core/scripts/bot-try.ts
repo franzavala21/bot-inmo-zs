@@ -11,9 +11,9 @@ const c = (text: string): HistoryMsg => ({ author: "client", kind: "text", text,
 const b = (text: string): HistoryMsg => ({ author: "ai", kind: "text", text, at: new Date().toISOString() });
 
 // Casos con nombre de pila conocido (el resto, sin nombre: el bot no tiene que usar ninguno).
-const NAMES: Record<string, string> = { saludo: "Martina", busqueda: "Pedro", luca: "Luca", luca_sigue: "Luca" };
+const NAMES: Record<string, string> = { saludo: "Martina", busqueda: "Pedro", luca: "Luca", luca_sigue: "Luca", permiso: "Ana" };
 // Casos donde el bot ya preguntó el tipo en el turno anterior (en producción sale de la bitácora).
-const ASKED: Record<string, string[]> = { luca_casa: ["type", "budget"], luca_igual: ["type", "budget"], califica_credito: ["budget", "credit"], califica_contado: ["budget", "credit"], califica_no_sabe: ["budget", "credit"] };
+const ASKED: Record<string, string[]> = { luca_casa: ["type", "budget"], luca_igual: ["type", "budget"], califica_credito: ["budget", "credit"], califica_contado: ["budget", "credit"], califica_no_sabe: ["budget", "credit"], permiso: ["budget", "credit", "sell", "purpose", "bedrooms", "name"] };
 
 const CASES: Record<string, HistoryMsg[]> = {
   saludo: [c("Hola buenas tardes")],
@@ -36,6 +36,8 @@ const CASES: Record<string, HistoryMsg[]> = {
   // Viene de un anuncio: pregunta por una propiedad puntual. Responde y cierra con la primera pregunta de seguimiento.
   anuncio: [c("Hola! Quiero más información sobre la casa ZHO4763673")],
   seguimiento: [c("Busco casa en Salsipuedes hasta 100 mil dólares, de contado")],
+  // Ya respondió todo lo demás: le toca la pregunta de permiso para avisos.
+  permiso: [c("Busco casa en Salsipuedes de 2 dormitorios hasta 100 mil dólares, de contado, para vivir. No tengo que vender nada")],
   // Calificación: antes de mostrar, presupuesto y (si es vivienda) crédito.
   califica: [c("Hola, busco casa en Salsipuedes")],
   califica_credito: [c("Hola, busco casa en Salsipuedes"), b("¿Con qué presupuesto contás y la comprarías con crédito hipotecario o de contado?"), c("hasta 90 mil dólares, con crédito")],

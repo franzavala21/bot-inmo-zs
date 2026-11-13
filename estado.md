@@ -185,3 +185,22 @@
 - Verificador: una objeción `dato_no_respaldado` sobre una pregunta al cliente se descarta en código. Regla 17 del redactor: crédito o contado es cómo paga el cliente, no una característica de la propiedad.
 - [x] `0007_lead_purpose.sql` aplicada.
 - `bot-try`: 26 casos (nuevos: `anuncio`, `seguimiento`). `califica_no_sabe` a veces deriva por el verificador (falla a favor de derivar).
+
+## Fase 5: matcher, avisos y agenda (2026-11-13)
+- **Matcher** (`packages/core/src/leads/matcher.ts`, código puro): cruza una propiedad con cada ficha y explica cada coincidencia ("Precio: USD 95.000 y su presupuesto es USD 100.000").
+  - Todo dato conocido de la ficha tiene que cumplirse. Se acepta hasta un 10 % por encima del presupuesto.
+  - Hacen falta al menos 2 de estos criterios: tipo, zona, presupuesto.
+  - Corre solo con las propiedades nuevas de cada sincronización (cron y botón). En Propiedades hay un botón "Buscar interesados" por propiedad.
+- **Quién recibe:** solo quien no pidió la baja (`contacts.proactive_opt_out`) y además escribió en las últimas 24 h o aceptó recibir avisos (`lead_profiles.wants_alerts`).
+- **Permiso:** Meta exige consentimiento para mensajes de marketing. La última pregunta de seguimiento es "¿Querés que te avisemos por este WhatsApp cuando entre una propiedad parecida?". El extractor guarda la respuesta con su frase. El redactor no lo ofrece por su cuenta: probado, si la regla lo mencionaba, lo ofrecía solo y el verificador lo frenaba.
+- **Avisos** (`/avisos`): un borrador por coincidencia, ordenados por puntaje, con los motivos.
+  - Se aprueba DE A UNO ("Aprobar y enviar") o se descarta. No hay "aprobar todo".
+  - Dentro de las 24 h sale como texto editable. Fuera, como la plantilla `aviso_propiedad` (MARKETING, es_AR) con los botones "Sí, quiero más info" (INFO) y "No quiero recibir más" (OPT_OUT).
+  - `approve_draft` encola, anota en la bitácora y registra el código de la propiedad (si responde "sí", el bot sabe de qué ficha habla).
+- **Baja:** el botón OPT_OUT da de baja al contacto, descarta sus borradores pendientes y le responde con una frase fija, sin turno del bot.
+- **Agenda** (`/agenda`): alta de visitas (contacto, propiedad, día y hora de Córdoba, notas) y estados Hecha, Cancelada y No vino. "Agendar visita" desde cada chat.
+- Migración `0008_fase5.sql`. Tests: 113.
+- Simulación sin escribir (2026-11-13): 2 fichas × 69 propiedades en venta → 14 y 9 coincidencias.
+- Limitación: el matcher usa solo el presupuesto máximo (no el mínimo de un rango).
+- [ ] Aplicar `0008_fase5.sql` ANTES de desplegar.
+- [ ] Crear la plantilla en Meta (`scripts/create-template.ts`), después de que los dueños aprueben el texto, y esperar la revisión (`--estado`).

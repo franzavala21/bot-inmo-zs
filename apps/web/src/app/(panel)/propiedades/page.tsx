@@ -1,6 +1,7 @@
 import { searchProperties, parseRooms } from "@inmo/core";
 import { serverClient } from "@/lib/supabase/server";
 import { syncNow } from "./actions";
+import { InterestedButton } from "./interested-button";
 
 const fmt = (n: number | null, cur: string | null) =>
   n == null ? "Consultar" : `${cur ?? ""} ${n.toLocaleString("es-AR")}`;
@@ -43,7 +44,8 @@ export default async function Propiedades({ searchParams }: { searchParams: Prom
             <div className="font-medium">{p.title}</div>
             <div className="text-sm text-zinc-600">{p.zone}{p.rooms ? ` · ${p.rooms} amb` : ""}{p.surface_total ? ` · ${p.surface_total} m²` : ""}</div>
             <div className="mt-1 font-semibold">{fmt(p.price, p.currency)}</div>
-            {p.public_url && <a href={p.public_url} target="_blank" className="text-sm text-blue-700 underline">Ver en la web</a>}
+            {(p.web_url || p.public_url) && <a href={p.web_url || p.public_url} target="_blank" className="text-sm text-blue-700 underline">Ver en la web</a>}
+            {p.operation === "sale" && <InterestedButton propertyId={p.id} />}
           </li>
         ))}
       </ul>

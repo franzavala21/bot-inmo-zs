@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import {
   adminClient, channelByPhoneNumberId, drainForConversation, ingestMetaInbound, MetaClient, metaConfigFromEnv,
-  META_SIGNATURE_HEADER, notifyHandoff, parseMetaWebhook, runBotTurn, updateLead, verifyMetaSignature,
+  META_SIGNATURE_HEADER, notifyHandoff, OPT_OUT_PAYLOAD, OPT_OUT_REPLY, parseMetaWebhook, runBotTurn, updateLead, verifyMetaSignature,
 } from "@inmo/core";
 
 // Webhook de la API oficial de WhatsApp (Meta). Público en el middleware: lo protege la firma con el App Secret.
@@ -46,17 +46,31 @@ export async function POST(req: Request) {
 
   // Se guarda todo ANTES de responder: si algo falla, Meta reintenta y ingest_inbound no duplica.
   const botTurns: { conv: string; msg: string }[] = [];
+  const optOuts: string[] = [];
   for (const m of events.inbound) {
     const ch = await channelByPhoneNumberId(db, m.phoneNumberId);
     if (!ch) { console.warn("[meta] número de Meta sin canal asignado"); continue; }
     try {
       const r = await ingestMetaInbound(db, client, ch, m);
       console.log("[meta] ok conv=%s dup=%s eco=%s", r.conversation_id, r.duplicate, m.fromMe);
+      // Botón "No quiero recibir más" de la plantilla: baja, confirmación fija y sin turno del bot.
+      if (!r.duplicate && !m.fromMe && m.buttonPayload === OPT_OUT_PAYLOAD) {
+        const { error: e1 } = await db.rpc("set_proactive_opt_out", { p_conversation_id: r.conversation_id });
+        if (e1) console.error("[meta] no se pudo dar de baja conv=%s", r.conversation_id);
+        else await db.rpc("enqueue_reply", { p_conversation_id: r.conversation_id, p_body: OPT_OUT_REPLY, p_author: "system", p_sent_by: null,
+          p_audit_event: "sent", p_audit_summary: "Confirmación de baja de avisos", p_audit_details: {} });
+        optOuts.push(r.conversation_id);
+        continue;
+      }
       if (!r.duplicate && !m.fromMe && r.message_id) botTurns.push({ conv: r.conversation_id, msg: r.message_id });
     } catch (e) {
       console.error("[meta] error al guardar: %s", (e as Error).message.slice(0, 160));
       return NextResponse.json({ error: "no se pudo guardar" }, { status: 500 });
     }
+  }
+
+  for (const conv of optOuts) {
+    after(async () => { await drainForConversation(adminClient(), new MetaClient(cfg), conv).catch(() => null); });
   }
 
   // Bot: igual que /api/inbound. claim_bot_turn decide si corresponde; después se envía lo que quedó en cola.

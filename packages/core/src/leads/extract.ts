@@ -24,6 +24,7 @@ export const ExtractedLead = z.object({
   name: q(z.string()),
   wants_visit: q(z.boolean()),
   purpose: q(z.enum(["vivienda", "fin_de_semana", "inversion"])),
+  wants_alerts: q(z.boolean()),
 });
 export type ExtractedLead = z.infer<typeof ExtractedLead>;
 export const LEAD_FIELDS = Object.keys(ExtractedLead.shape) as (keyof ExtractedLead)[];
