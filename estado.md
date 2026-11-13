@@ -202,5 +202,5 @@
 - Migración `0008_fase5.sql`. Tests: 113.
 - Simulación sin escribir (2026-11-13): 2 fichas × 69 propiedades en venta → 14 y 9 coincidencias.
 - Limitación: el matcher usa solo el presupuesto máximo (no el mínimo de un rango).
-- [ ] Aplicar `0008_fase5.sql` ANTES de desplegar.
+- [x] `0008_fase5.sql` aplicada.
 - [ ] Crear la plantilla en Meta (`scripts/create-template.ts`), después de que los dueños aprueben el texto, y esperar la revisión (`--estado`).
