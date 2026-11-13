@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 3, pasando a la API oficial de Meta (decisión 2026-11-10). El bot ya funciona en real; el canal está caído hasta conectar Meta. Código listo y probado con tests; falta `0004` y la configuración en Meta.
+**Fase actual:** 3. WhatsApp conectado por la API oficial de Meta con un **número nuevo** (+54 9 351 772-5778), probado en ambos sentidos el 2026-11-12. Bot APAGADO.
 
 ## Hecho
 - **Fase 0:** monorepo (pnpm), `CLAUDE.md`, `docs/especificacion.md` (F-01 a F-17), `.env.example` y `.gitignore`.
@@ -92,15 +92,18 @@
 - Migración `0004_meta.sql` (SIN aplicar): `channels.meta_phone_number_id`, `outbound_messages.claimed_at`, `fail_stale_sending`, `mark_delivery_failed`, `retry_outbound`.
 - Tests: 52 en core (14 nuevos de Meta).
 
-### Falta para conectar Meta
-- [ ] Aplicar `0004_meta.sql`.
-- [ ] App de Meta y número de prueba; su teléfono como destinatario de prueba.
-- [ ] Variables `META_ACCESS_TOKEN` (usuario del sistema, permanente), `META_APP_SECRET`, `META_VERIFY_TOKEN` en Vercel y redeploy.
-- [ ] Webhook en Meta → `/api/whatsapp/meta`, campo `messages`.
-- [ ] Pasar el canal ventas a `transport = 'meta'` con su `meta_phone_number_id`, y probar de punta a punta.
-- [ ] Apagar el worker en Railway, sin borrar el volumen.
-- [ ] Elegir el camino de la coexistencia (Tech Provider propio o Solution Partner) para el número principal.
-- [x] Página pública `/privacidad` (política de privacidad y eliminación de datos, para publicar la app). Revisarla con un abogado.
-- [ ] La política promete borrar los datos de quien lo pida: falta un botón en el panel para borrar un contacto (hoy sería a mano en Supabase).
-- [ ] Claves de Meta expuestas en una captura (2026-11-12): restablecer el App Secret y regenerar los tokens antes de cargarlos en Vercel.
+### Conexión con Meta (2026-11-12)
+- Número nuevo, no el principal: +54 9 351 772-5778, `phone_number_id` 1426968407167616, WABA 1859520905073768, app 3186797974853138 ("Bot Mensajes Inmobiliaria"). Usuario del sistema "Zavala Agente".
+- Webhook de la app → `/api/whatsapp/meta`, campo `messages`. La app está suscripta a la WABA (`subscribed_apps`): faltaba eso y por eso Meta no avisaba.
+- Vercel: `META_ACCESS_TOKEN` (usuario del sistema, sin vencimiento, 21:13), `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_GRAPH_VERSION`. Hay que actualizarlas con `vercel env update` (`rm` pide confirmación).
+- Claves expuestas en capturas y en el chat: token viejo revocado (verificado `is_valid: false`); App Secret restablecido.
+- Prueba 2026-11-12: "Hola" entrante guardado (`[meta] ok conv=aa3322a7… dup=false`) y respuesta de prueba enviada por la cola (`status: sent`, audit `sent_test`).
+- Canal `ventas`: `transport = 'meta'`. El worker de Railway no hace nada; falta apagarlo (sin borrar el volumen).
+
+### Pendientes Meta
+- [ ] Pasar la app a modo "Activo" (política: `/privacidad`) si Meta no entrega mensajes de terceros.
+- [ ] Probar el bot por Meta: prenderlo en `/conexion` y devolver el chat al bot.
+- [ ] Apagar el worker en Railway.
+- [x] Página `/privacidad`. Revisarla con un abogado.
+- [ ] Botón en el panel para borrar los datos de un contacto (lo promete la política).
 - Ojo, Fase 5: los avisos proactivos (F-15) van a necesitar plantillas aprobadas por Meta.
