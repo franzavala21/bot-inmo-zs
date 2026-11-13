@@ -16,7 +16,7 @@ type Msg = {
 const EVENT_CLS: Record<string, string> = {
   handoff: "text-red-700 font-medium", sent_handoff: "text-red-700", rejected_numeric: "text-amber-700",
   rejected_verifier: "text-amber-700", agent_error: "text-red-700", send_failed: "text-red-700", limit: "text-red-700",
-  sent: "text-emerald-700", discarded: "text-zinc-500",
+  sent: "text-emerald-700", discarded: "text-zinc-500", notified: "text-zinc-500", notify_failed: "text-red-700",
 };
 
 /** Un detalle corto y legible de cada evento (sin datos personales). */

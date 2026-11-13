@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import {
   adminClient, channelByPhoneNumberId, drainForConversation, ingestMetaInbound, MetaClient, metaConfigFromEnv,
-  META_SIGNATURE_HEADER, parseMetaWebhook, runBotTurn, verifyMetaSignature,
+  META_SIGNATURE_HEADER, notifyHandoff, parseMetaWebhook, runBotTurn, verifyMetaSignature,
 } from "@inmo/core";
 
 // Webhook de la API oficial de WhatsApp (Meta). Público en el middleware: lo protege la firma con el App Secret.
@@ -66,6 +66,7 @@ export async function POST(req: Request) {
       try {
         const result = await runBotTurn(adminClient(), t.conv, t.msg);
         console.log("[bot] conv=%s resultado=%s", t.conv, result);
+        if (result === "handoff") await notifyHandoff(adminClient(), t.conv);
       } catch (e) {
         console.error("[bot] conv=%s falló: %s", t.conv, (e as Error).message);
       }

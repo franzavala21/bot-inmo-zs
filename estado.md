@@ -112,3 +112,8 @@
 - `packages/core/prompts/redactor.md` es la fuente del prompt del redactor. `pnpm --filter @inmo/core prompts` genera `src/bot/prompts.generated.ts` (no se edita a mano). El build de la web lo regenera solo.
 - Tests: si el `.md` y el generado no coinciden, o falta `{{GUARDIA}}`, `{{PRESENTACION}}`, `needs_human`, `property_codes_used` o `human_reason`, fallan. Si en producción faltara una pieza, el redactor falla y el orquestador deriva.
 - Se agregó el nombre "Zavala Seppey". `bot-try`: 15 casos OK (USD 0,019).
+
+## Aviso de derivaciones por email (2026-11-12)
+- Cuando un turno del bot termina en `handoff`, `notifyHandoff` (`packages/core/src/notify/handoff.ts`) manda un email a todos los de `allowed_users` por la API de Resend. Lleva el motivo, la hora límite de las 24 h y el link al chat. No lleva el teléfono ni el texto del cliente. Queda en la bitácora como `notified` o `notify_failed`.
+- Lo llaman `/api/whatsapp/meta` y `/api/inbound`. No avisa cuando un dueño toma el chat a mano ni cuando el cliente sigue escribiendo en un chat que ya está en modo humano.
+- [ ] Cargar en Vercel `RESEND_API_KEY` y `NOTIFY_FROM` (remitente de un dominio verificado en Resend). El dominio de la inmobiliaria no tiene los registros de Resend (DKIM). Mientras falten estas variables, cada derivación deja `notify_failed` en la bitácora.
