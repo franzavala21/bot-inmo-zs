@@ -203,4 +203,4 @@
 - Simulación sin escribir (2026-11-13): 2 fichas × 69 propiedades en venta → 14 y 9 coincidencias.
 - Limitación: el matcher usa solo el presupuesto máximo (no el mínimo de un rango).
 - [x] `0008_fase5.sql` aplicada.
-- [ ] Crear la plantilla en Meta (`scripts/create-template.ts`), después de que los dueños aprueben el texto, y esperar la revisión (`--estado`).
+- [x] Plantilla `aviso_propiedad` creada en Meta el 2026-11-13 (id 1802575614312703), aprobada por los dueños. Estado: PENDING. Para ver la revisión: `scripts/create-template.ts --estado`.
