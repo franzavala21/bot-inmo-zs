@@ -161,3 +161,14 @@
 - **Tipo de propiedad:** si el cliente no lo dice y con sus criterios hay más de un tipo, el bot no muestra fichas: pregunta nombrando los tipos que hay. La búsqueda queda en la bitácora con `asked_type: true`. En el turno siguiente, si sigue sin tipo ("me da igual"), muestra variedad: no pregunta dos veces.
 - **Verificador:** se descarta en código una objeción `dato_no_respaldado` si cada parte de la cita está tal cual en los valores de la ficha (`supportedByFacts`). Ejemplos: "apto crédito", "aire acondicionado". "Pileta" o "acepta mascotas" siguen frenando si no están.
 - `bot-try`: 20 casos OK (nuevos: `luca_casa`, `luca_igual`, `soy_bot`), USD 0,032.
+
+## Calificación antes de mostrar (2026-11-13)
+- Decisión de los dueños: antes de mandar propiedades, el bot califica al lead. Lo decide el código (`qualifyGaps` en el orquestador), no el modelo:
+  - **Tipo:** si no lo dijo y hay más de uno, lo pregunta (junto con el presupuesto, si falta).
+  - **Presupuesto:** siempre.
+  - **Crédito o contado:** solo para viviendas (casa, departamento, PH).
+  - Todo va en un solo mensaje. Cada pregunta se hace **una sola vez por chat** (queda en la bitácora como `searched.details.asked`). Si no contesta ("no sé, mostrame"), se muestra igual.
+- **Crédito:** el clasificador devuelve `credit` = `credito` | `contado` | `no_dijo`. Es un enum porque con un booleano el modelo completaba `false` sin que el cliente lo hubiera dicho. Con `credito`, la búsqueda prioriza las que dicen "apto crédito". Si no hay, muestra otras con la nota "no digas que lo son".
+- Decir "voy con crédito" ya no es tema reservado. Pedir asesoramiento (bancos, montos, trámites) sigue derivando.
+- **Dato:** solo 6 de 69 propiedades en venta dicen "apto crédito" en la ficha y no hay etiqueta en Tokko. Conviene marcarlo en Tokko.
+- `bot-try`: 24 casos, nuevos `califica*`.

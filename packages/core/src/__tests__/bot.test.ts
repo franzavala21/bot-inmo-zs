@@ -46,7 +46,7 @@ const ROW: PublicRow = {
 
 const cls = (over: Partial<Classification> = {}): Classification => ({
   intent: "busqueda", reserved_topic: null,
-  filters: { operation: null, property_type: "casa", zone: "Salsipuedes", rooms_min: null, bedrooms_min: null, price_min: null, price_max: null, currency: null, pets: null, keywords: null },
+  filters: { operation: null, property_type: "casa", zone: "Salsipuedes", rooms_min: null, bedrooms_min: null, price_min: null, price_max: null, currency: null, pets: null, keywords: null, credit: "no_dijo" },
   property_code: null, refers_to_shown: false, confidence: 0.9, ...over,
 });
 
@@ -70,7 +70,8 @@ const deps = (llm: Llm, rows: PublicRow[] = [ROW]): OrchestratorDeps => ({
 });
 const msg = (text: string | null, author: HistoryMsg["author"] = "client", kind = "text"): HistoryMsg => ({ author, kind, text, at: "2026-11-05T10:00:00Z" });
 const input = (history: HistoryMsg[]): TurnInput => ({
-  history, channelOperation: "sale", businessInfo: [], recentlyShown: [],
+  // Por defecto ya se calificó (presupuesto y crédito): los tests de calificación lo cambian.
+  history, channelOperation: "sale", businessInfo: [], recentlyShown: [], asked: ["budget", "credit"],
   rules: [{ topic: "visita", description: "Quiere visitar", handoff_phrase: "Te contacta uno de nosotros para coordinar." }],
 });
 const goodReply = { reply: "¡Hola! Tengo una casa en Salsipuedes a USD 59.000: https://ficha.info/p/x1", property_codes_used: ["ZHO1"], needs_human: false, human_reason: null };
@@ -305,7 +306,7 @@ describe("búsqueda con rango y sin tipo", () => {
     });
     expect(asked).toMatchObject({ priceMin: 80000, limit: 30 });
     const searched = d.trace.find((t) => t.event === "searched");
-    expect(searched?.details).toMatchObject({ codes: [], asked_type: true });
+    expect(searched?.details).toMatchObject({ codes: [], asked: ["type"] });
     expect(String((searched?.details as { note: string }).note)).toContain("Terreno (1), Casa (1)");
   });
   it("si ya preguntó el tipo y no eligió, muestra variedad", async () => {
@@ -313,7 +314,7 @@ describe("búsqueda con rango y sin tipo", () => {
       { ...ROW, id: "t", reference_code: "ZLA1", property_type: "Terreno", price: 130000 },
       { ...ROW, id: "c", reference_code: "ZHO1", property_type: "Casa", price: 95000 },
     ];
-    const d = await decide({ ...input([msg("cualquiera")]), askedType: true }, {
+    const d = await decide({ ...input([msg("cualquiera")]), asked: ["type", "budget", "credit"] }, {
       ...deps(fakeLlm({ clasificacion: [cls({ filters: { ...cls().filters, property_type: null, zone: "Rio Ceballos" } })],
         respuesta: [{ reply: "Tengo un terreno a USD 130.000 y una casa a USD 95.000.", property_codes_used: ["ZLA1", "ZHO1"], needs_human: false, human_reason: null }],
         verificacion: [{ violations: [] }] })),
@@ -352,5 +353,35 @@ describe("objeciones del verificador que la ficha respalda", () => {
     expect(supportedByFacts("aire acondicionado y pileta", facts)).toBe(false);
     expect(supportedByFacts("acepta mascotas", facts)).toBe(false);
     expect(supportedByFacts("seguridad privada", facts)).toBe(false);
+  });
+});
+
+// ───────── Calificación antes de mostrar ─────────
+import { qualifyGaps } from "../bot/orchestrator";
+describe("calificación del lead", () => {
+  const F = cls().filters;
+  it("casa sin presupuesto ni crédito: pregunta las dos cosas", () => {
+    expect(qualifyGaps(F, "casa", new Set())).toEqual(["budget", "credit"]);
+  });
+  it("terreno: solo presupuesto (no hay crédito hipotecario para lotes)", () => {
+    expect(qualifyGaps(F, "terreno", new Set())).toEqual(["budget"]);
+  });
+  it("con lo que ya dijo, o lo que ya se preguntó, no pregunta", () => {
+    expect(qualifyGaps({ ...F, price_max: 100000, credit: "contado" }, "casa", new Set())).toEqual([]);
+    expect(qualifyGaps(F, "casa", new Set(["budget", "credit"]))).toEqual([]);
+    expect(qualifyGaps({ ...F, price_min: 80000 }, "departamento", new Set(["credit"]))).toEqual([]);
+  });
+  it("en el chat: no busca, pregunta y queda anotado", async () => {
+    const llm = fakeLlm({ clasificacion: [cls()], respuesta: [{ reply: "¿Con qué presupuesto contás y la comprarías con crédito?", property_codes_used: [], needs_human: false, human_reason: null }], verificacion: [{ violations: [] }] });
+    let searched = false;
+    const d = await decide({ ...input([msg("busco casa en Salsipuedes")]), asked: [] }, { ...deps(llm), search: async () => { searched = true; return [ROW]; } });
+    expect(searched).toBe(false);
+    expect(d.action).toBe("reply");
+    expect(d.trace.find((t) => t.event === "searched")?.details).toMatchObject({ codes: [], asked: ["budget", "credit"] });
+  });
+  it("con crédito: primero busca las aptas crédito", () => {
+    const plan = searchPlan(cls({ filters: { ...F, price_max: 100000, credit: "credito" } }), "sale");
+    expect(plan[0].filters.text).toBe("apto credito");
+    expect(plan[1].note).toContain("no digas que lo son");
   });
 });

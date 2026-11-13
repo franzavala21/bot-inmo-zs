@@ -100,6 +100,25 @@ export function mixByType<T extends { property_type: string | null }>(rows: T[],
   return { picked, counts: [...groups.entries()].map(([k, v]) => [k, v.length]) };
 }
 
+// ── Calificación del lead ──
+export type Qualifier = "type" | "budget" | "credit";
+export const QUESTION: Record<Qualifier, string> = {
+  type: "qué tipo de propiedad busca",
+  budget: "con qué presupuesto aproximado cuenta",
+  credit: "si la compraría con crédito hipotecario (así le muestra las que son aptas crédito) o de contado",
+};
+const ASKED_LABEL: Record<Qualifier, string> = { type: "el tipo", budget: "el presupuesto", credit: "si va con crédito" };
+/** Viviendas: las que pueden ser aptas crédito hipotecario. */
+const CREDIT_TYPES = /^(casa|departamento|ph|duplex|chalet|cabana)/;
+
+/** Qué falta saber antes de mostrar propiedades. Nunca vuelve a pedir algo que ya se preguntó (si no contestó, se sigue igual). */
+export function qualifyGaps(f: Classification["filters"], type: string | null, asked: Set<string>): Qualifier[] {
+  const gaps: Qualifier[] = [];
+  if (!f.price_max && !f.price_min && !asked.has("budget")) gaps.push("budget");
+  if (type && CREDIT_TYPES.test(type) && (f.credit ?? "no_dijo") === "no_dijo" && !asked.has("credit")) gaps.push("credit");
+  return gaps;
+}
+
 export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { filters: SearchFilters; note: string | null }[] {
   const f = c.filters;
   const type = f.property_type ? normalize(f.property_type) : undefined;
@@ -126,6 +145,13 @@ export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { fil
       note: `Aproximada: no hay ${base.propertyType} en ${base.zone} con eso; se muestran de otras zonas.` });
   if (base.zone) // la zona puede estar escrita distinto en la base: probar como texto libre
     steps.splice(1, 0, { filters: { ...base, zone: undefined, text: [base.zone, base.text].filter(Boolean).join(" ") }, note: null });
+  if (f.credit === "credito") {
+    // Va con crédito: primero las que dicen "apto crédito"; si no hay, las demás sin afirmar que lo son.
+    const warn = "Ninguna de estas figura como apta crédito en la ficha: no digas que lo son (si pregunta, eso hay que confirmarlo).";
+    const plain = steps.splice(0);
+    steps.push({ filters: { ...base, text: [base.text, "apto credito"].filter(Boolean).join(" ") }, note: null });
+    steps.push(...plain.map((st) => ({ ...st, note: [st.note, warn].filter(Boolean).join(" ") })));
+  }
   return steps;
 }
 
@@ -184,7 +210,8 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
   let properties: PropertyFact[] = [];
   let searchNote: string | null = null;
   let didSearch = false;
-  let askedType = false;
+  const asked = new Set(input.asked ?? []);
+  const askedNow: Qualifier[] = [];
   if (c.intent === "busqueda" || c.intent === "consulta_propiedad") {
     if (c.property_code) {
       const row = await deps.byCode(c.property_code.trim());
@@ -199,35 +226,46 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       searchNote = "Son las fichas que el bot ya mostró en este chat.";
     }
     const f = c.filters;
-    const hasCriteria = !!(f.property_type || f.zone || f.rooms_min || f.bedrooms_min || f.price_max || f.price_min || f.keywords || f.pets);
+    const type = f.property_type ? normalize(f.property_type) : null;
+    const hasCriteria = !!(f.property_type || f.zone || f.rooms_min || f.bedrooms_min || f.price_max || f.price_min || f.keywords || f.pets || f.credit === "credito" || f.credit === "contado");
     if (!properties.length && c.intent === "busqueda" && !hasCriteria) {
       searchNote = "El cliente todavía no dio ningún criterio: no se buscó. Preguntale qué tipo de propiedad y en qué zona.";
     } else if (!properties.length && c.intent === "busqueda") {
-      didSearch = true;
-      for (const step of searchPlan(c, input.channelOperation)) {
-        // Sin tipo de propiedad: se trae una muestra amplia y se elige variada, para que el cliente vea qué hay y elija.
-        const rows = await deps.search(step.filters.propertyType ? step.filters : { ...step.filters, limit: 30 });
-        if (!rows.length) continue;
-        if (step.filters.propertyType) { properties = rows.map(toFact); searchNote = step.note; break; }
-        const mix = mixByType(rows);
-        const types = mix.counts.map(([t, n]) => `${t} (${n}${n >= 30 ? " o más" : ""})`).join(", ");
-        if (mix.counts.length > 1 && !input.askedType) {
-          // Decisión de los dueños: si hay más de un tipo, primero se pregunta cuál busca y después se muestran fichas.
-          askedType = true;
-          searchNote = `El cliente no dijo qué tipo de propiedad busca. Con esos criterios hay: ${types}. No muestres fichas todavía: preguntale qué tipo busca, nombrando esos tipos.`;
+      // ── Calificación (decisión de los dueños): antes de mostrar, saber presupuesto y, si es vivienda, si va con crédito ──
+      const gaps = type ? qualifyGaps(f, type, asked) : [];
+      if (gaps.length) {
+        askedNow.push(...gaps);
+        searchNote = `Antes de mostrar propiedades hay que conocer mejor al cliente. No muestres fichas ni digas que hay o que no hay: en un solo mensaje corto y natural, preguntale ${gaps.map((g) => QUESTION[g]).join(" y ")}.`;
+      } else {
+        didSearch = true;
+        for (const step of searchPlan(c, input.channelOperation)) {
+          // Sin tipo de propiedad: se trae una muestra amplia para saber qué tipos hay.
+          const rows = await deps.search(step.filters.propertyType ? step.filters : { ...step.filters, limit: 30 });
+          if (!rows.length) continue;
+          if (step.filters.propertyType) { properties = rows.map(toFact); searchNote = step.note; break; }
+          const mix = mixByType(rows);
+          const types = mix.counts.map(([t, n]) => `${t} (${n}${n >= 30 ? " o más" : ""})`).join(", ");
+          if (mix.counts.length > 1 && !asked.has("type")) {
+            // Si hay más de un tipo, primero se pregunta cuál busca (y el presupuesto, si falta) y después se muestran fichas.
+            askedNow.push("type");
+            const alsoBudget = !f.price_max && !f.price_min && !asked.has("budget");
+            if (alsoBudget) askedNow.push("budget");
+            searchNote = `El cliente no dijo qué tipo de propiedad busca. Con esos criterios hay: ${types}. No muestres fichas todavía: preguntale qué tipo busca, nombrando esos tipos${alsoBudget ? `, y ${QUESTION.budget}, en el mismo mensaje` : ""}.`;
+            break;
+          }
+          properties = mix.picked.map(toFact);
+          searchNote = [step.note, mix.counts.length > 1
+            ? `Ya se le preguntó el tipo y no lo eligió. Con esos criterios hay: ${types}. Mostrá estas de muestra.`
+            : null].filter(Boolean).join(" ") || null;
           break;
         }
-        properties = mix.picked.map(toFact);
-        searchNote = [step.note, mix.counts.length > 1
-          ? `Ya se le preguntó el tipo y no lo eligió. Con esos criterios hay: ${types}. Mostrá estas de muestra.`
-          : null].filter(Boolean).join(" ") || null;
-        break;
+        if (!properties.length && !askedNow.length) searchNote = "No hay propiedades disponibles con esos criterios ni parecidas.";
       }
-      if (!properties.length && !askedType) searchNote = "No hay propiedades disponibles con esos criterios ni parecidas.";
     }
     trace.push({ event: "searched", summary: properties.length
       ? `Encontró ${properties.length} propiedad(es)${searchNote ? " (aproximado)" : ""}`
-      : askedType ? "Preguntó qué tipo de propiedad busca" : "No encontró propiedades", details: { codes: properties.map((p) => p.codigo), note: searchNote, ...(askedType ? { asked_type: true } : {}) } });
+      : askedNow.length ? `Calificación: preguntó ${askedNow.map((a) => ASKED_LABEL[a]).join(" y ")}` : "No encontró propiedades",
+      details: { codes: properties.map((p) => p.codigo), note: searchNote, ...(askedNow.length ? { asked: askedNow } : {}) } });
   }
 
   // ── Redactor → control numérico → verificador (un reintento) ──

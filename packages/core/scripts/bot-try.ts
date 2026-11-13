@@ -13,7 +13,7 @@ const b = (text: string): HistoryMsg => ({ author: "ai", kind: "text", text, at:
 // Casos con nombre de pila conocido (el resto, sin nombre: el bot no tiene que usar ninguno).
 const NAMES: Record<string, string> = { saludo: "Martina", busqueda: "Pedro", luca: "Luca", luca_sigue: "Luca" };
 // Casos donde el bot ya preguntó el tipo en el turno anterior (en producción sale de la bitácora).
-const ASKED: Record<string, boolean> = { luca_casa: true, luca_igual: true };
+const ASKED: Record<string, string[]> = { luca_casa: ["type", "budget"], luca_igual: ["type", "budget"], califica_credito: ["budget", "credit"], califica_contado: ["budget", "credit"], califica_no_sabe: ["budget", "credit"] };
 
 const CASES: Record<string, HistoryMsg[]> = {
   saludo: [c("Hola buenas tardes")],
@@ -33,6 +33,11 @@ const CASES: Record<string, HistoryMsg[]> = {
   luca_casa: [c("Me gustaria averiguar para comprar una propiedad en Rio Ceballos, de entre 80k y 130k USD"), b("¿Buscás casa o terreno? En ese rango tengo de los dos."), c("casa")],
   luca_igual: [c("Me gustaria averiguar para comprar una propiedad en Rio Ceballos, de entre 80k y 130k USD"), b("¿Buscás casa o terreno? En ese rango tengo de los dos."), c("me da igual, lo que haya")],
   soy_bot: [c("Hola"), b("Hola! Mi nombre es Francisco! ¿En qué te puedo ayudar?"), c("sos un bot o una persona?")],
+  // Calificación: antes de mostrar, presupuesto y (si es vivienda) crédito.
+  califica: [c("Hola, busco casa en Salsipuedes")],
+  califica_credito: [c("Hola, busco casa en Salsipuedes"), b("¿Con qué presupuesto contás y la comprarías con crédito hipotecario o de contado?"), c("hasta 90 mil dólares, con crédito")],
+  califica_contado: [c("Hola, busco casa en Salsipuedes"), b("¿Con qué presupuesto contás y la comprarías con crédito hipotecario o de contado?"), c("unos 70 mil, de contado")],
+  califica_no_sabe: [c("Hola, busco casa en Salsipuedes"), b("¿Con qué presupuesto contás y la comprarías con crédito hipotecario o de contado?"), c("no sé todavía, mostrame qué hay")],
   luca_sigue: [c("Me gustaria averiguar para comprar una propiedad en Rio Ceballos, de entre 80k y 130k USD"), b("Tengo terrenos en Río Ceballos: un lote de 500 m² por USD 22.500. ¿Querés ver otras opciones?"), c("Entre 80000 y 150000USD tenes algo?")],
   alquiler: [c("hola, tenés alguna casa para alquilar en Salsipuedes?")],
   alquiler_codigo: [c("info de la ZHO12435857")],
@@ -49,7 +54,7 @@ async function main() {
     if (only && name !== only) continue;
     const t0 = Date.now();
     const d = await decide(
-      { history, channelOperation: "sale", rules: (rv?.rules ?? []) as Rule[], businessInfo: [], recentlyShown: [], clientName: NAMES[name] ?? null, askedType: ASKED[name] ?? false },
+      { history, channelOperation: "sale", rules: (rv?.rules ?? []) as Rule[], businessInfo: [], recentlyShown: [], clientName: NAMES[name] ?? null, asked: ASKED[name] ?? [] },
       {
         llm,
         search: async (f) => (await searchProperties(db, f)) as unknown as PublicRow[],
