@@ -68,4 +68,33 @@ export class TokkoClient {
     }
     return all;
   }
+
+  /** Contactos creados desde `since` (consultas de portales y web), del más nuevo al más viejo. Solo lectura. */
+  async listContactsSince(since: Date, pageSize = 100, max = 1000): Promise<TokkoContact[]> {
+    const all: TokkoContact[] = [];
+    let offset = 0;
+    for (;;) {
+      const page = await this.get<TokkoPage<TokkoContact>>("/contact/", {
+        limit: pageSize, offset, order_by: "-created_at", created_at__gte: since.toISOString().slice(0, 10),
+      });
+      all.push(...page.objects);
+      offset += page.objects.length;
+      if (!page.meta.next || page.objects.length === 0 || offset >= page.meta.total_count || all.length >= max) break;
+    }
+    return all;
+  }
+}
+
+/** Contacto de Tokko (solo lo que usamos). Tiene datos personales: nunca loguearlo. */
+export interface TokkoContact {
+  id: number;
+  name?: string | null;
+  cellphone?: string | null;
+  phone?: string | null;
+  other_phone?: string | null;
+  email?: string | null;
+  created_at?: string;
+  lead_status?: string | null;
+  tags?: { id?: number; name?: string; group_name?: string | null }[];
+  deleted_at?: string | null;
 }

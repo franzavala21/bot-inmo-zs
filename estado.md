@@ -204,3 +204,17 @@
 - Limitación: el matcher usa solo el presupuesto máximo (no el mínimo de un rango).
 - [x] `0008_fase5.sql` aplicada.
 - [x] Plantilla `aviso_propiedad` creada en Meta el 2026-11-13 (id 1802575614312703), aprobada por los dueños. Estado: PENDING. Para ver la revisión: `scripts/create-template.ts --estado`.
+
+## Consultas de portales (2026-11-14)
+- Tokko expone los contactos por API (solo lectura): `GET /contact/` con `order_by=-created_at` y `created_at__gte`. Hay 2612 en total y entran unos 2 por día.
+  - El origen viene en la etiqueta del grupo "Origen de contacto" (Zonaprop, Mercadolibre). Sin grupo vienen Web, "Contacto por Whatsapp", Venta/Alquiler, tipo y zonas.
+  - **No trae la propiedad puntual ni el mensaje:** eso solo está en el email del portal.
+  - De los últimos 50: 37 "Sin Contactar".
+- `portal_leads` (migración `0009`): copia de los contactos de los últimos 30 días la primera vez y después los nuevos. El teléfono se normaliza a 549 + 10 dígitos (`normalizeArPhone`) y se vincula con el chat si esa persona ya escribió al bot.
+- `/consultas` ("Consultas portales"):
+  - Se actualiza desde Tokko al abrir (si pasaron más de 5 min), con el botón "Actualizar" y en el cron diario.
+  - Pestañas Nuevas / Contactadas / Descartadas.
+  - "Escribirle por WhatsApp": un dueño aprueba de a una; sale la plantilla `consulta_portal` (MARKETING) desde el número del bot con el botón "No me interesa" (OPT_OUT, misma baja que los avisos). Si responde, sigue el bot.
+  - Bloqueado si es alquiler, si no hay teléfono válido, si pidió la baja o si ya escribió al bot hace menos de 24 h (en ese caso, se responde desde el chat).
+- Política `/privacidad` actualizada: consultas de portales y primer mensaje aprobado por una persona.
+- [ ] Aplicar `0009_portal_leads.sql` ANTES de desplegar.

@@ -1,7 +1,9 @@
-// Crea en Meta la plantilla de avisos de propiedades (PROPERTY_TEMPLATE), para mandar fuera de las 24 h.
+// Crea en Meta una plantilla: "avisos" (PROPERTY_TEMPLATE, avisos de propiedades) o "portal" (PORTAL_TEMPLATE, consultas de portales).
 // Meta la revisa (de minutos a un par de días). El texto sale de src/leads/matcher.ts: el mismo que se guarda en el chat.
-// Uso: cd packages/core && node_modules/.bin/tsx --env-file=../../.env scripts/create-template.ts [--estado]
-import { PROPERTY_TEMPLATE } from "../src/leads/matcher";
+// Uso: cd packages/core && node_modules/.bin/tsx --env-file=../../.env scripts/create-template.ts [avisos|portal] [--estado]
+import { PROPERTY_TEMPLATE as AVISOS } from "../src/leads/matcher";
+import { PORTAL_TEMPLATE } from "../src/tokko/portal";
+const PROPERTY_TEMPLATE = process.argv.includes("portal") ? PORTAL_TEMPLATE : AVISOS;
 
 const token = process.env.META_ACCESS_TOKEN;
 const waba = process.env.META_WABA_ID ?? "1859520905073768";

@@ -3,6 +3,7 @@ import Link from "next/link";
 const NAV = [
   { href: "/bandeja", label: "Bandeja" },
   { href: "/leads", label: "A quién llamar" },
+  { href: "/consultas", label: "Consultas portales" },
   { href: "/propiedades", label: "Propiedades" },
   { href: "/avisos", label: "Avisos" },
   { href: "/agenda", label: "Agenda" },

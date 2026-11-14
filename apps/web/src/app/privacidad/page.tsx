@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Cómo tratamos los datos de quienes nos escriben por WhatsApp.",
 };
 
-const UPDATED = "12 de noviembre de 2026";
+const UPDATED = "14 de noviembre de 2026";
 const WEB = "https://inmobiliariazavalaseppey.com.ar/";
 
 function Section({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) {
@@ -27,7 +27,7 @@ export default function Privacidad() {
       </header>
 
       <p className="text-[15px] leading-relaxed text-zinc-700">
-        Esta política explica qué datos tratamos cuando nos escribís por WhatsApp, para qué los usamos y cómo podés
+        Esta política explica qué datos tratamos cuando nos escribís por WhatsApp o nos dejás una consulta en un portal inmobiliario, para qué los usamos y cómo podés
         pedir que los corrijamos o los borremos. Aplica a nuestro canal de WhatsApp y a la herramienta interna con la que
         lo atendemos.
       </p>
@@ -45,6 +45,10 @@ export default function Privacidad() {
           <li>Los mensajes que nos mandás: texto, audios, imágenes y otros archivos.</li>
           <li>Lo que nos cuentes sobre tu búsqueda: tipo de propiedad, zona, presupuesto y preferencias.</li>
           <li>Las respuestas que te enviamos y el registro interno de cada respuesta (qué se respondió y cuándo).</li>
+          <li>
+            Si nos dejaste una consulta en un portal (por ejemplo Zonaprop o Mercado Libre) o en nuestra web: tu nombre, teléfono,
+            email y lo que consultaste, tal como nos llegan a nuestro sistema de gestión.
+          </li>
         </ul>
         <p>No te pedimos datos sensibles ni datos bancarios por WhatsApp.</p>
       </Section>
@@ -53,6 +57,7 @@ export default function Privacidad() {
         <ul className="list-disc space-y-1 pl-5">
           <li>Responder tus consultas y mostrarte propiedades disponibles que coincidan con lo que buscás.</li>
           <li>Pasar tu consulta a una persona del equipo cuando hace falta (por ejemplo, para coordinar una visita).</li>
+          <li>Responderte por WhatsApp una consulta que nos dejaste en un portal o en la web. Ese primer mensaje lo aprueba una persona del equipo.</li>
           <li>Hacer el seguimiento comercial de tu consulta.</li>
         </ul>
         <p>No vendemos ni cedemos tus datos a terceros para publicidad.</p>
