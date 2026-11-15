@@ -256,4 +256,4 @@
   - si las anteriores se atendieron (contactada o descartada) antes de este aviso, aparece como nueva.
   - Si después la sincronización de Tokko trae el mismo contacto (por teléfono o email), le pone el id a esa consulta en vez de crear otra.
 - Migración `0011` (`tokko_contact_id` admite null, columna `source`).
-- [ ] Aplicar `0011_portal_leads_from_email.sql` ANTES de desplegar, y después crear las consultas de los avisos que ya llegaron.
+- [x] `0011` aplicada y avisos ya recibidos procesados (2026-11-15).
