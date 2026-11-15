@@ -217,4 +217,4 @@
   - "Escribirle por WhatsApp": un dueño aprueba de a una; sale la plantilla `consulta_portal` (MARKETING) desde el número del bot con el botón "No me interesa" (OPT_OUT, misma baja que los avisos). Si responde, sigue el bot.
   - Bloqueado si es alquiler, si no hay teléfono válido, si pidió la baja o si ya escribió al bot hace menos de 24 h (en ese caso, se responde desde el chat).
 - Política `/privacidad` actualizada: consultas de portales y primer mensaje aprobado por una persona.
-- [ ] Aplicar `0009_portal_leads.sql` ANTES de desplegar.
+- [x] `0009_portal_leads.sql` aplicada.
