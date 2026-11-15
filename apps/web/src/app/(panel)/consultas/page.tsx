@@ -32,6 +32,23 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
   const { data: lastMsgs } = convIds.length
     ? await sb.from("messages").select("conversation_id, created_at").in("conversation_id", convIds).eq("author", "client").order("created_at", { ascending: false })
     : { data: [] };
+  // Propiedad consultada (de los emails "Nueva consulta" de Tokko), por teléfono o email.
+  const phones = (leads ?? []).map((l) => l.phone).filter(Boolean) as string[];
+  const emails = (leads ?? []).map((l) => l.email?.toLowerCase()).filter(Boolean) as string[];
+  const [{ data: inqP }, { data: inqE }] = await Promise.all([
+    phones.length ? sb.from("portal_inquiries").select("phone, email, property_codes, property_title, message, received_at").in("phone", phones) : Promise.resolve({ data: [] }),
+    emails.length ? sb.from("portal_inquiries").select("phone, email, property_codes, property_title, message, received_at").in("email", emails) : Promise.resolve({ data: [] }),
+  ]);
+  type Inq = { phone: string | null; email: string | null; property_codes: string[]; property_title: string | null; message: string | null; received_at: string };
+  const inquiries = [...((inqP ?? []) as Inq[]), ...((inqE ?? []) as Inq[])].sort((a, b) => b.received_at.localeCompare(a.received_at));
+  const inquiryOf = (phone: string | null, email: string | null) =>
+    inquiries.find((q) => (phone && q.phone === phone) || (email && q.email === email.toLowerCase()));
+  const codes = [...new Set(inquiries.flatMap((q) => q.property_codes))];
+  const { data: props } = codes.length
+    ? await sb.from("properties_public").select("reference_code, zone, price, currency, web_url, public_url").in("reference_code", codes)
+    : { data: [] };
+  const propBy = new Map((props ?? []).map((p) => [p.reference_code as string, p]));
+
   const lastClient = new Map<string, string>();
   for (const m of lastMsgs ?? []) if (!lastClient.has(m.conversation_id)) lastClient.set(m.conversation_id, m.created_at);
 
@@ -61,6 +78,9 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
             : opt ? "Pidió no recibir mensajes"
             : openChat ? "Ya escribió al bot hace menos de 24 h: respondele desde el chat"
             : null;
+          const inq = inquiryOf(l.phone, l.email);
+          const prop = inq?.property_codes.map((c) => propBy.get(c)).find(Boolean);
+          const zonesShown = prop?.zone ? [prop.zone] : zones;
           const what = [l.operation === "rent" ? "Alquiler" : l.operation === "sale" ? "Compra" : null, l.property_type, zones.join(", ")].filter(Boolean).join(" · ");
           return (
             <li key={l.id} className="space-y-2 rounded-xl border border-zinc-200 bg-white shadow-sm p-3">
@@ -72,6 +92,17 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
                 <span className="text-xs text-zinc-500">{timeAgo(l.tokko_created_at)} · Tokko: {l.tokko_status ?? "—"}</span>
               </div>
               <div className="text-sm text-zinc-600">{what || "Sin datos de lo que busca"}</div>
+              {inq && (
+                <div className="rounded-lg bg-emerald-50/60 p-2 text-sm">
+                  <div className="text-emerald-900">
+                    Consultó por <b>{inq.property_codes[0] ?? "una propiedad"}</b>{inq.property_title ? ` · ${inq.property_title}` : ""}
+                    {prop?.price ? ` · ${prop.currency} ${Number(prop.price).toLocaleString("es-AR")}` : ""}
+                    {(prop?.web_url || prop?.public_url) && <> · <a href={prop.web_url || prop.public_url!} target="_blank" className="underline">ver</a></>}
+                    {inq.property_codes[0] && !prop && <span className="text-zinc-500"> (ya no está publicada)</span>}
+                  </div>
+                  {inq.message && <details className="mt-1 text-xs text-zinc-600"><summary className="cursor-pointer">Mensaje</summary><p className="mt-1 whitespace-pre-wrap">{inq.message}</p></details>}
+                </div>
+              )}
               <div className="text-xs text-zinc-500">
                 {l.phone ? phonePretty(l.phone) : l.phone_raw ? `Teléfono no reconocido: ${l.phone_raw}` : "Sin teléfono"}
                 {l.email ? ` · ${l.email}` : ""}
@@ -79,7 +110,7 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
               </div>
               {tab === "new" && (
                 <LeadActions leadId={l.id} blocked={blocked}
-                  preview={renderPortalTemplate(portalTemplateParams({ name: l.name, origin: l.origin, zones }))} />
+                  preview={renderPortalTemplate(portalTemplateParams({ name: l.name, origin: l.origin, zones: zonesShown }))} />
               )}
               {tab !== "new" && l.decided_at && <div className="text-xs text-zinc-500">{TABS[tab]} {timeAgo(l.decided_at)}</div>}
             </li>

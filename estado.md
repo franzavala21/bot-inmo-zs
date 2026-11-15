@@ -232,3 +232,12 @@
   - Barra lateral con marca, íconos, grupos (Clientes / Inmobiliaria / Sistema), pantalla activa resaltada y contadores en Suspense: chats que necesitan atención (rojo), consultas nuevas y avisos pendientes.
   - Abajo, el estado del bot y "Salir" (antes no había forma de cerrar sesión). En el celular, barra superior con menú desplegable.
   - Encabezado común (`PageHeader`) en todas las pantallas y login con la marca. Se sacó "Reglas" del menú (no está hecho).
+
+## Propiedad consultada desde el email de Tokko (2026-11-14)
+- El aviso "Nueva consulta" de Tokko (llega a francizavala15@gmail.com) trae nombre, email, teléfono, etiquetas, mensaje y el **código de la propiedad**. También trae la calle, que NO se guarda.
+- `parseTokkoInquiry` (`packages/core/src/tokko/inquiry-email.ts`). Probado con 2 emails reales (Mercadolibre sin mensaje; Zonaprop con mensaje): saca todo y la calle no se cuela. El test usa un email inventado con la misma estructura. Los `.html` de ejemplo están en la raíz, ignorados por git (`/*.html`): no subirlos.
+- Llegada de los emails: Google Apps Script en la cuenta del dueño (`scripts/gmail-tokko.gs`). Cada 5 min busca "Nueva consulta" de Tokko sin la etiqueta `crm-procesado` y hace POST a `/api/email/tokko` (Bearer `EMAIL_INGEST_SECRET`, comparación en tiempo constante). Etiqueta el hilo solo si el CRM respondió 200.
+- `portal_inquiries` (migración `0010`). En `/consultas` cada consulta muestra "Consultó por ZHO… · título · precio · ver" y el mensaje. Al escribirle, la zona sale de la propiedad y `contact_portal_lead` anota el código en la bitácora (`sent`), así el bot sabe de qué ficha hablan si responde.
+- Seguridad: en un archivo "use server" no se exportan ayudantes (serían acciones públicas). Los filtros van con `.eq()` separados, no con texto armado en `.or()`.
+- [ ] Aplicar `0010_portal_inquiries.sql` ANTES de desplegar.
+- [ ] El dueño instala el script en script.google.com (instrucciones arriba del archivo) con la clave del portapapeles.

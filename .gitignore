@@ -13,3 +13,6 @@ auth_info*/
 .vercel/
 .DS_Store
 .env.local
+
+# Emails guardados de ejemplo (tienen datos de clientes): nunca al repositorio
+/*.html
