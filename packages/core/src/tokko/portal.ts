@@ -61,7 +61,8 @@ export const PORTAL_FIRST_SYNC_DAYS = 30;
 export async function syncPortalLeads(db: SupabaseClient, tokkoKey: string, now = new Date()): Promise<{ fetched: number; saved: number }> {
   const { data: last } = await db.from("portal_leads").select("tokko_created_at").order("tokko_created_at", { ascending: false }).limit(1).maybeSingle();
   const since = last ? new Date(new Date(last.tokko_created_at).getTime() - 2 * 86400_000) : new Date(now.getTime() - PORTAL_FIRST_SYNC_DAYS * 86400_000);
-  const contacts = (await new TokkoClient(tokkoKey).listContactsSince(since)).filter((c) => !c.deleted_at);
+  // Ojo: Tokko completa deleted_at con una fecha en TODOS los contactos (también los activos): no sirve para filtrar.
+  const contacts = await new TokkoClient(tokkoKey).listContactsSince(since);
   const rows = contacts.map(toPortalLead);
   // Vincular con chats existentes por teléfono.
   const phones = [...new Set(rows.map((r) => r.phone).filter(Boolean))] as string[];

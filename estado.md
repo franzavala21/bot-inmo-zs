@@ -218,3 +218,5 @@
   - Bloqueado si es alquiler, si no hay teléfono válido, si pidió la baja o si ya escribió al bot hace menos de 24 h (en ese caso, se responde desde el chat).
 - Política `/privacidad` actualizada: consultas de portales y primer mensaje aprobado por una persona.
 - [x] `0009_portal_leads.sql` aplicada.
+- 2026-11-14: Tokko completa `deleted_at` con una fecha en todos los contactos, también los activos (los borrados están en otro recurso, `deletedcontact`). Se sacó ese filtro. Primera sincronización: 63 consultas (31 Mercadolibre, 27 Zonaprop, 1 Proppit, 4 sin origen; 40 venta, 19 alquiler; 58 con teléfono válido).
+- La API v1 de Tokko NO expone la propiedad consultada. Recursos disponibles: branch, contact, contact_tag, countries, country, deletedcontact, development, development_type, inactiveproperty, location, operations, photo, property, property_custom_tag, property_tag, property_type, signed_operations, state, user, webcontact. Para saber la propiedad: emails de aviso (portales o Tokko).
