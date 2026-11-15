@@ -248,3 +248,12 @@
 - En el chat, "Reintentar" aparece también en envíos con plantilla aunque hayan pasado 24 h.
 - `seedLeadFromPortal`: al escribirle a una consulta, la ficha arranca con operación, tipo, zona y nombre de Tokko. La frase de cada dato es la fuente ("Consulta en Zonaprop (Tokko)"). No pisa datos existentes. Se armó la ficha de la consulta ya contactada.
 - Estado al 2026-11-15: `aviso_propiedad` APPROVED; `consulta_portal` PENDING.
+
+## Consultas también desde el email (2026-11-15)
+- Primera carga del script de Gmail: 64 avisos (4 al 14/11; antes no hay, hipótesis: Tokko empezó a mandarlos a ese Gmail el 4/11). Los 64 traen la propiedad. 55 se cruzaron con una consulta de la sección y 9 no: clientes viejos de Tokko que volvieron a consultar, que la API no trae porque busca por fecha de alta del contacto.
+- Ahora el aviso por email también crea la consulta (`leadsFromInquiries`, `source = 'email'`, sin `tokko_contact_id`):
+  - si esa persona ya tiene una consulta "nueva", no se duplica;
+  - si las anteriores se atendieron (contactada o descartada) antes de este aviso, aparece como nueva.
+  - Si después la sincronización de Tokko trae el mismo contacto (por teléfono o email), le pone el id a esa consulta en vez de crear otra.
+- Migración `0011` (`tokko_contact_id` admite null, columna `source`).
+- [ ] Aplicar `0011_portal_leads_from_email.sql` ANTES de desplegar, y después crear las consultas de los avisos que ya llegaron.

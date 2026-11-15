@@ -22,7 +22,7 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
   const stale = !last || Date.now() - new Date(last.synced_at).getTime() > STALE_MS;
 
   const { data: leads } = await sb.from("portal_leads")
-    .select("id, name, phone, phone_raw, email, origin, operation, property_type, zones, tokko_status, tokko_created_at, status, conversation_id, decided_at, contact:contacts(proactive_opt_out)")
+    .select("id, source, name, phone, phone_raw, email, origin, operation, property_type, zones, tokko_status, tokko_created_at, status, conversation_id, decided_at, contact:contacts(proactive_opt_out)")
     .eq("status", tab).order("tokko_created_at", { ascending: false }).limit(150);
   const { data: counts } = await sb.from("portal_leads").select("status");
   const count = (s: string) => (counts ?? []).filter((c) => c.status === s).length;
@@ -98,7 +98,7 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
                   {l.name ?? "Sin nombre"}
                   {l.origin && <span className={`ml-2 rounded px-1.5 py-0.5 text-xs ${ORIGIN_CLS[l.origin] ?? "bg-zinc-100 text-zinc-600"}`}>{l.origin}</span>}
                 </div>
-                <span className="text-xs text-zinc-500">{timeAgo(l.tokko_created_at)} · Tokko: {l.tokko_status ?? "—"}</span>
+                <span className="text-xs text-zinc-500">{timeAgo(l.tokko_created_at)} · {l.source === "email" && !l.tokko_status ? "Aviso por email de Tokko" : `Tokko: ${l.tokko_status ?? "—"}`}</span>
               </div>
               <div className="text-sm text-zinc-600">{what || "Sin datos de lo que busca"}</div>
               {inq && (

@@ -72,8 +72,24 @@ export async function syncPortalLeads(db: SupabaseClient, tokkoKey: string, now 
     const k = r.phone ? byPhone.get(r.phone) : undefined;
     return { ...r, ...(k ? { contact_id: k.id, conversation_id: (k.conversations as { id: string }[])[0]?.id ?? null } : {}) };
   });
-  for (let i = 0; i < withLinks.length; i += 200) {
-    const { error } = await db.from("portal_leads").upsert(withLinks.slice(i, i + 200), { onConflict: "tokko_contact_id" });
+  // Consultas que ya creó el email (sin id de Tokko): si coincide teléfono o email, se les pone el id en vez de duplicar.
+  const ids = withLinks.map((r) => r.tokko_contact_id);
+  const { data: known2 } = ids.length ? await db.from("portal_leads").select("tokko_contact_id").in("tokko_contact_id", ids) : { data: [] };
+  const already = new Set((known2 ?? []).map((k) => Number(k.tokko_contact_id)));
+  const { data: fromEmail } = await db.from("portal_leads").select("id, phone, email").is("tokko_contact_id", null);
+  const toUpsert: typeof withLinks = [];
+  for (const r of withLinks) {
+    const twin = !already.has(r.tokko_contact_id)
+      ? (fromEmail ?? []).find((e) => (r.phone && e.phone === r.phone) || (r.email && e.email && e.email.toLowerCase() === r.email.toLowerCase()))
+      : undefined;
+    if (twin) {
+      const { error } = await db.from("portal_leads").update({ tokko_contact_id: r.tokko_contact_id, tokko_status: r.tokko_status, synced_at: r.synced_at }).eq("id", twin.id);
+      if (error) throw new Error(`portal_leads: ${error.message}`);
+      fromEmail!.splice(fromEmail!.indexOf(twin), 1);
+    } else toUpsert.push(r);
+  }
+  for (let i = 0; i < toUpsert.length; i += 200) {
+    const { error } = await db.from("portal_leads").upsert(toUpsert.slice(i, i + 200), { onConflict: "tokko_contact_id" });
     if (error) throw new Error(`portal_leads: ${error.message}`);
   }
   return { fetched: contacts.length, saved: withLinks.length };
@@ -99,4 +115,42 @@ export function portalTemplateParams(l: { name: string | null; origin: string | 
 }
 export function renderPortalTemplate(params: string[]): string {
   return PORTAL_TEMPLATE.body.replace(/\{\{(\d+)\}\}/g, (_, i) => params[Number(i) - 1] ?? "");
+}
+
+// ───────── Consultas creadas desde el email "Nueva consulta" de Tokko ─────────
+export interface InquiryRow { name: string | null; email: string | null; phone: string | null; tags: string[]; received_at: string }
+
+/**
+ * Qué hacer con un aviso por email, según las consultas que ya hay de esa persona (código puro):
+ * - hay una "nueva" → nada (esa consulta ya muestra la propiedad);
+ * - todas se decidieron (contactada/descartada) ANTES de este aviso → consulta nueva (volvió a consultar);
+ * - alguna se decidió después del aviso → nada (ya se atendió);
+ * - no hay ninguna → consulta nueva.
+ */
+export function inquiryCreatesLead(received: string, existing: { status: string; decided_at: string | null }[]): boolean {
+  if (existing.some((l) => l.status === "new")) return false;
+  return existing.every((l) => !!l.decided_at && l.decided_at < received);
+}
+
+export async function leadsFromInquiries(db: SupabaseClient, inqs: InquiryRow[]): Promise<number> {
+  let created = 0;
+  for (const q of inqs) {
+    if (!q.phone && !q.email) continue;
+    const [byPhone, byEmail] = await Promise.all([
+      q.phone ? db.from("portal_leads").select("status, decided_at").eq("phone", q.phone) : Promise.resolve({ data: [] }),
+      q.email ? db.from("portal_leads").select("status, decided_at").ilike("email", q.email) : Promise.resolve({ data: [] }),
+    ]);
+    const existing = [...(byPhone.data ?? []), ...(byEmail.data ?? [])] as { status: string; decided_at: string | null }[];
+    if (!inquiryCreatesLead(q.received_at, existing)) continue;
+    const t = parseContactTags(q.tags.map((name) => ({ name })));
+    const { data: contact } = q.phone ? await db.from("contacts").select("id, conversations(id)").eq("phone", q.phone).maybeSingle() : { data: null };
+    const { error } = await db.from("portal_leads").insert({
+      tokko_contact_id: null, source: "email", name: q.name, phone: q.phone, phone_raw: q.phone, email: q.email,
+      tokko_status: null, tokko_created_at: q.received_at, ...t,
+      ...(contact ? { contact_id: contact.id, conversation_id: (contact.conversations as { id: string }[])[0]?.id ?? null } : {}),
+    });
+    if (error) { console.error("[email] no se pudo crear la consulta: %s", error.code); continue; }
+    created++;
+  }
+  return created;
 }

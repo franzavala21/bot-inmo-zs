@@ -61,3 +61,14 @@ describe("ficha inicial desde el portal", () => {
     expect(seedProfile({ name: "Inmobiliaria Sur", origin: null, operation: null, property_type: null, zones: [] }, "T")).toEqual({});
   });
 });
+
+import { inquiryCreatesLead } from "../tokko/portal";
+describe("consulta nueva desde el email", () => {
+  it("nadie la tenía: se crea", () => expect(inquiryCreatesLead("2026-11-14T10:00:00Z", [])).toBe(true));
+  it("ya hay una nueva de esa persona: no se duplica", () =>
+    expect(inquiryCreatesLead("2026-11-14T10:00:00Z", [{ status: "new", decided_at: null }])).toBe(false));
+  it("ya la contactaron y volvió a consultar después: se crea", () =>
+    expect(inquiryCreatesLead("2026-11-14T10:00:00Z", [{ status: "contacted", decided_at: "2026-11-10T00:00:00Z" }])).toBe(true));
+  it("el aviso es anterior a cuando la atendieron: no se crea", () =>
+    expect(inquiryCreatesLead("2026-11-09T10:00:00Z", [{ status: "dismissed", decided_at: "2026-11-10T00:00:00Z" }])).toBe(false));
+});
