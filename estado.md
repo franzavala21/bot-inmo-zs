@@ -239,5 +239,12 @@
 - Llegada de los emails: Google Apps Script en la cuenta del dueño (`scripts/gmail-tokko.gs`). Cada 5 min busca "Nueva consulta" de Tokko sin la etiqueta `crm-procesado` y hace POST a `/api/email/tokko` (Bearer `EMAIL_INGEST_SECRET`, comparación en tiempo constante). Etiqueta el hilo solo si el CRM respondió 200.
 - `portal_inquiries` (migración `0010`). En `/consultas` cada consulta muestra "Consultó por ZHO… · título · precio · ver" y el mensaje. Al escribirle, la zona sale de la propiedad y `contact_portal_lead` anota el código en la bitácora (`sent`), así el bot sabe de qué ficha hablan si responde.
 - Seguridad: en un archivo "use server" no se exportan ayudantes (serían acciones públicas). Los filtros van con `.eq()` separados, no con texto armado en `.or()`.
-- [ ] Aplicar `0010_portal_inquiries.sql` ANTES de desplegar.
+- [x] `0010_portal_inquiries.sql` aplicada.
 - [ ] El dueño instala el script en script.google.com (instrucciones arriba del archivo) con la clave del portapapeles.
+
+## Plantillas en revisión y ficha inicial de los portales (2026-11-15)
+- Bitácora del primer envío a una consulta: `meta 132001: template name (consulta_portal) does not exist in es_AR`. Meta rechaza así las plantillas que todavía están en revisión (PENDING).
+- `templateReady` (`transport/meta.ts`) consulta el estado en Meta (caché de 5 min; si Meta no responde, no bloquea). Consultas y Avisos lo muestran y bloquean el envío con plantilla hasta que esté APPROVED.
+- En el chat, "Reintentar" aparece también en envíos con plantilla aunque hayan pasado 24 h.
+- `seedLeadFromPortal`: al escribirle a una consulta, la ficha arranca con operación, tipo, zona y nombre de Tokko. La frase de cada dato es la fuente ("Consulta en Zonaprop (Tokko)"). No pisa datos existentes. Se armó la ficha de la consulta ya contactada.
+- Estado al 2026-11-15: `aviso_propiedad` APPROVED; `consulta_portal` PENDING.

@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { PROPERTY_TEMPLATE, PUBLIC_COLUMNS, renderTemplate, SERVICE_WINDOW_MS, templateParams, type PublicRow } from "@inmo/core";
+import { MetaClient, metaConfigFromEnv, PROPERTY_TEMPLATE, PUBLIC_COLUMNS, renderTemplate, SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateParams, templateReady, type PublicRow } from "@inmo/core";
 import { ownerClient } from "@/lib/supabase/server";
 import { contactLabel, timeAgo } from "@/lib/format";
 import { DraftActions } from "./draft-card";
@@ -30,6 +30,8 @@ export default async function Avisos() {
   const scoreBy = new Map((scores ?? []).map((s) => [s.contact_id, s.score as number]));
   const propBy = new Map(((props ?? []) as unknown as PublicRow[]).map((p) => [p.id, p]));
   const now = Date.now();
+  const cfg = metaConfigFromEnv();
+  const tpl = await templateReady(cfg ? new MetaClient(cfg) : null, PROPERTY_TEMPLATE.name, PROPERTY_TEMPLATE.language);
 
   const items = pending.map((d) => {
     const lead = leadBy.get(d.contact_id);
@@ -37,8 +39,9 @@ export default async function Avisos() {
     const consent = (lead?.wants_alerts as { value?: boolean } | null)?.value === true;
     const prop = d.property_id ? propBy.get(d.property_id) : undefined;
     const contact = d.contact as unknown as Contact;
-    const mode: "text" | "template" | "blocked" = !prop || contact?.proactive_opt_out ? "blocked" : inWindow ? "text" : consent ? "template" : "blocked";
+    const mode: "text" | "template" | "blocked" = !prop || contact?.proactive_opt_out ? "blocked" : inWindow ? "text" : consent && tpl.ok ? "template" : "blocked";
     const why = !prop ? "La propiedad ya no está disponible" : contact?.proactive_opt_out ? "Pidió no recibir avisos"
+      : mode === "blocked" && consent ? `Pasaron 24 h y la plantilla está ${TEMPLATE_STATUS_LABEL[tpl.status] ?? tpl.status}: por ahora no se le puede escribir`
       : mode === "blocked" ? "Pasaron 24 h y no aceptó recibir avisos: no se le puede escribir" : null;
     return { d, prop, contact, mode, why, score: scoreBy.get(d.contact_id) ?? 0,
       body: mode === "template" && prop ? renderTemplate(templateParams(prop)) : d.body,

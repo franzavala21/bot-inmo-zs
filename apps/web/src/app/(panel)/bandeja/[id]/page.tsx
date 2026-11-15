@@ -11,7 +11,7 @@ import { RetryButton } from "./retry-button";
 
 type Msg = {
   id: string; author: "client" | "ai" | "human" | "system"; kind: string; body: string | null; media_path: string | null;
-  transcript: string | null; created_at: string; outbound_messages: { id: string; status: string; error: string | null }[];
+  transcript: string | null; created_at: string; outbound_messages: { id: string; status: string; error: string | null; template: unknown }[];
 };
 
 const EVENT_CLS: Record<string, string> = {
@@ -39,7 +39,7 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
   const sb = await ownerClient();
   const [{ data: conv }, { data: msgs }] = await Promise.all([
     sb.from("conversations").select("id, mode, needs_attention, attention_reason, channel_id, contact_id, contact:contacts(phone, name, display_name, is_test)").eq("id", id).maybeSingle(),
-    sb.from("messages").select("id, author, kind, body, media_path, transcript, created_at, outbound_messages(id, status, error)")
+    sb.from("messages").select("id, author, kind, body, media_path, transcript, created_at, outbound_messages(id, status, error, template)")
       .eq("conversation_id", id).order("created_at", { ascending: false }).limit(200),
   ]);
   if (!conv) notFound();
@@ -131,7 +131,7 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
                 {m.transcript && <p className="mt-1 border-t border-zinc-200 pt-1 text-xs text-zinc-600">Transcripción: {m.transcript}</p>}
                 <div className="mt-1 flex justify-end gap-2 text-[11px] text-zinc-400">
                   {out && <span className={out.status === "failed" ? "text-red-600" : ""} title={out.error ?? undefined}>{STATUS_LABEL[out.status] ?? out.status}</span>}
-                  {out?.status === "failed" && !windowClosed && <RetryButton conversationId={conv.id} outboundId={out.id} />}
+                  {out?.status === "failed" && (!windowClosed || !!out.template) && <RetryButton conversationId={conv.id} outboundId={out.id} />}
                   <span>{timeShort(m.created_at)}</span>
                 </div>
               </div>

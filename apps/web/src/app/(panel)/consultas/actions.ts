@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import {
   adminClient, drainForConversation, MetaClient, metaConfigFromEnv, PORTAL_TEMPLATE, portalTemplateParams,
-  renderPortalTemplate, syncPortalLeads,
+  renderPortalTemplate, seedLeadFromPortal, syncPortalLeads, TEMPLATE_STATUS_LABEL, templateReady,
 } from "@inmo/core";
 
 import { requireOwner } from "@/lib/supabase/server";
@@ -41,10 +41,15 @@ export async function contactPortalLead(leadId: string): Promise<{ ok: boolean; 
   const user = await requireOwner();
   if (!user) return { ok: false, error: "No autorizado" };
   const db = adminClient();
-  const { data: l } = await db.from("portal_leads").select("name, origin, zones, operation, status, phone, email").eq("id", leadId).maybeSingle();
+  const { data: l } = await db.from("portal_leads").select("name, origin, zones, operation, property_type, status, phone, email").eq("id", leadId).maybeSingle();
   if (!l || l.status !== "new") return { ok: false, error: "Esta consulta ya no está pendiente" };
   if (!l.phone) return { ok: false, error: "No tiene un teléfono válido" };
   if (l.operation === "rent") return { ok: false, error: "Es de alquiler: la atiende otra persona" };
+
+  // Meta rechaza una plantilla que todavía está en revisión (error 132001): no se encola.
+  const cfg = metaConfigFromEnv();
+  const ready = await templateReady(cfg ? new MetaClient(cfg) : null, PORTAL_TEMPLATE.name, PORTAL_TEMPLATE.language);
+  if (!ready.ok) return { ok: false, error: `La plantilla está ${TEMPLATE_STATUS_LABEL[ready.status] ?? ready.status}: todavía no se puede enviar` };
 
   // Si llegó el email de Tokko, se sabe la propiedad: la zona sale de ahí y el bot queda sabiendo de qué ficha hablan.
   const inq = await inquiryFor(db, l.phone, l.email);
@@ -63,7 +68,13 @@ export async function contactPortalLead(leadId: string): Promise<{ ok: boolean; 
     return { ok: false, error: m.includes("pendiente") ? "Esta consulta ya no está pendiente" : m.includes("no recibir") ? "Pidió no recibir mensajes" : "No se pudo encolar" };
   }
   const conversationId = (data as { conversation_id: string }).conversation_id;
-  const cfg = metaConfigFromEnv();
+  // La ficha arranca con lo que ya sabemos por Tokko (la fuente queda a la vista en cada dato).
+  const { data: done } = await db.from("portal_leads").select("contact_id").eq("id", leadId).maybeSingle();
+  if (done?.contact_id) {
+    await seedLeadFromPortal(db, done.contact_id, conversationId, {
+      name: l.name, origin: l.origin, operation: l.operation, property_type: l.property_type, zones: prop?.zone ? [prop.zone] : l.zones ?? [],
+    });
+  }
   const r = await drainForConversation(db, cfg ? new MetaClient(cfg) : null, conversationId).catch(() => null);
   revalidatePath("/consultas");
   return { ok: true, conversationId, sent: !!r && r.sent > 0 };

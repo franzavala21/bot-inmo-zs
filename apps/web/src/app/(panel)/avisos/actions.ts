@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import {
   adminClient, drainForConversation, lastClientMessageAt, MetaClient, metaConfigFromEnv, PROPERTY_TEMPLATE, PUBLIC_COLUMNS,
-  renderTemplate, SERVICE_WINDOW_MS, templateParams, type PublicRow,
+  renderTemplate, SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateParams, templateReady, type PublicRow,
 } from "@inmo/core";
 import { requireOwner } from "@/lib/supabase/server";
 
@@ -30,6 +30,9 @@ export async function approveDraft(draftId: string, editedBody?: string): Promis
     if ((lead?.wants_alerts as { value?: boolean } | null)?.value !== true) {
       return { ok: false, error: "Pasaron más de 24 h y el cliente no aceptó recibir avisos: no se le puede escribir" };
     }
+    const cfg0 = metaConfigFromEnv();
+    const ready = await templateReady(cfg0 ? new MetaClient(cfg0) : null, PROPERTY_TEMPLATE.name, PROPERTY_TEMPLATE.language);
+    if (!ready.ok) return { ok: false, error: `La plantilla está ${TEMPLATE_STATUS_LABEL[ready.status] ?? ready.status}: por ahora solo salen avisos como texto (dentro de las 24 h)` };
     const params = templateParams(prop as unknown as PublicRow);
     template = { name: PROPERTY_TEMPLATE.name, language: PROPERTY_TEMPLATE.language, params, buttons: PROPERTY_TEMPLATE.buttons.map((b) => b.payload) };
     body = renderTemplate(params);

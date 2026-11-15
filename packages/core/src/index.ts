@@ -25,3 +25,4 @@ export * from "./bot/name";
 export * from "./leads/matcher";
 export * from "./tokko/portal";
 export * from "./tokko/inquiry-email";
+export * from "./leads/seed";

@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { PORTAL_TEMPLATE, portalTemplateParams, renderPortalTemplate, SERVICE_WINDOW_MS } from "@inmo/core";
+import { MetaClient, metaConfigFromEnv, PORTAL_TEMPLATE, portalTemplateParams, renderPortalTemplate, SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateReady } from "@inmo/core";
 import { ownerClient } from "@/lib/supabase/server";
 import { phonePretty, timeAgo } from "@/lib/format";
 import { AutoSync, LeadActions, RefreshButton } from "./lead-actions";
@@ -49,6 +49,9 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
     : { data: [] };
   const propBy = new Map((props ?? []).map((p) => [p.reference_code as string, p]));
 
+  const cfg = metaConfigFromEnv();
+  const tpl = await templateReady(cfg ? new MetaClient(cfg) : null, PORTAL_TEMPLATE.name, PORTAL_TEMPLATE.language);
+
   const lastClient = new Map<string, string>();
   for (const m of lastMsgs ?? []) if (!lastClient.has(m.conversation_id)) lastClient.set(m.conversation_id, m.created_at);
 
@@ -58,6 +61,11 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
         description={<>Lo que entra a Tokko (Zonaprop, Mercadolibre, web). Escribirle manda la plantilla «{PORTAL_TEMPLATE.name}» desde el número del bot;
           si responde, el bot sigue la charla y lo califica.</>} />
       {stale && <AutoSync />}
+      {!tpl.ok && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          La plantilla «{PORTAL_TEMPLATE.name}» está {TEMPLATE_STATUS_LABEL[tpl.status] ?? tpl.status}. Hasta que Meta la apruebe no se puede escribir a estas consultas.
+        </p>
+      )}
 
       <nav className="flex gap-1 text-sm">
         {(Object.keys(TABS) as (keyof typeof TABS)[]).map((k) => (
@@ -77,6 +85,7 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
             : !l.phone ? "Sin teléfono válido para WhatsApp"
             : opt ? "Pidió no recibir mensajes"
             : openChat ? "Ya escribió al bot hace menos de 24 h: respondele desde el chat"
+            : !tpl.ok ? `Plantilla ${TEMPLATE_STATUS_LABEL[tpl.status] ?? tpl.status}`
             : null;
           const inq = inquiryOf(l.phone, l.email);
           const prop = inq?.property_codes.map((c) => propBy.get(c)).find(Boolean);

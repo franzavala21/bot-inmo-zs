@@ -47,3 +47,17 @@ describe("plantilla de consulta de portal", () => {
     expect(portalTemplateParams({ name: "Inmobiliaria Sur", origin: "Web", zones: [] })).toEqual(["qué tal", "nuestra web", "Sierras Chicas"]);
   });
 });
+
+import { seedProfile } from "../leads/seed";
+describe("ficha inicial desde el portal", () => {
+  it("operación, tipo, zona y nombre, con la fuente como frase", () => {
+    const p = seedProfile({ name: "Ana Pérez", origin: "Zonaprop", operation: "sale", property_type: "casa", zones: ["Colón"] }, "T");
+    expect(p).toMatchObject({
+      operation: { value: "sale", quote: "Consulta en Zonaprop (Tokko)" }, property_type: { value: "casa" }, zones: { value: ["Colón"] },
+      name: { value: "Ana Pérez", quote: "Nombre en Tokko (Zonaprop)" },
+    });
+  });
+  it("sin datos no inventa nada; un nombre raro no se usa", () => {
+    expect(seedProfile({ name: "Inmobiliaria Sur", origin: null, operation: null, property_type: null, zones: [] }, "T")).toEqual({});
+  });
+});

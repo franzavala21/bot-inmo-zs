@@ -188,6 +188,13 @@ export class MetaClient {
     return id;
   }
 
+  /** Estado de una plantilla en Meta para un idioma: APPROVED, PENDING, REJECTED… o null si no existe. */
+  async templateStatus(wabaId: string, name: string, language: string): Promise<string | null> {
+    const json = await this.call(`${wabaId}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,language&limit=20`);
+    const t = (json?.data ?? []).find((x: { name: string; language: string }) => x.name === name && x.language === language);
+    return t?.status ?? null;
+  }
+
   /** Baja un archivo por su id de Meta. */
   async downloadMedia(mediaId: string, maxBytes: number): Promise<{ data: Buffer; mime: string } | null> {
     const info = await this.call(mediaId);
@@ -205,3 +212,25 @@ export class MetaClient {
     return this.call(`${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`);
   }
 }
+
+// ───────── ¿Se puede usar la plantilla? (Meta rechaza las que están en revisión: error 132001) ─────────
+const statusCache = new Map<string, { status: string | null; at: number }>();
+const STATUS_TTL_MS = 5 * 60_000;
+export const META_WABA_ID = process.env.META_WABA_ID ?? "1859520905073768";
+
+/** Estado de la plantilla, con caché de 5 minutos. Si Meta no responde, devuelve "UNKNOWN" (no bloquea por un error de red). */
+export async function templateReady(client: MetaClient | null, name: string, language: string): Promise<{ ok: boolean; status: string }> {
+  if (!client) return { ok: false, status: "SIN_CONFIGURAR" };
+  const key = `${name}:${language}`;
+  const hit = statusCache.get(key);
+  let status = hit && Date.now() - hit.at < STATUS_TTL_MS ? hit.status : undefined;
+  if (status === undefined) {
+    try { status = await client.templateStatus(META_WABA_ID, name, language); statusCache.set(key, { status, at: Date.now() }); }
+    catch { return { ok: true, status: "UNKNOWN" }; }
+  }
+  return { ok: status === "APPROVED", status: status ?? "NO_EXISTE" };
+}
+export const TEMPLATE_STATUS_LABEL: Record<string, string> = {
+  PENDING: "en revisión de Meta", REJECTED: "rechazada por Meta", PAUSED: "pausada por Meta", DISABLED: "desactivada por Meta",
+  NO_EXISTE: "no existe en Meta", SIN_CONFIGURAR: "WhatsApp sin configurar",
+};
