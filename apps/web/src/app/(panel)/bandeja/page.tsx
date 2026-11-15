@@ -1,5 +1,6 @@
+import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { contactLabel, KIND_LABEL, timeAgo } from "@/lib/format";
 import { WorkerBadge } from "../conexion/worker-badge";
@@ -12,7 +13,7 @@ type Row = {
 
 export default async function Bandeja({ searchParams }: { searchParams: Promise<{ f?: string }> }) {
   const { f = "" } = await searchParams;
-  const sb = await serverClient();
+  const sb = await ownerClient();
   let q = sb.from("conversations")
     .select("id, mode, needs_attention, attention_reason, last_message_at, contact:contacts(phone, name, display_name, is_test), messages(author, kind, body, created_at)")
     .order("last_message_at", { ascending: false })
@@ -27,20 +28,17 @@ export default async function Bandeja({ searchParams }: { searchParams: Promise<
   const pending = (r: Row) => r.messages[0]?.author === "client";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-4xl space-y-4">
       <RealtimeRefresh tables={["conversations", "messages"]} />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Bandeja</h1>
-        <WorkerBadge />
-      </div>
+      <PageHeader title="Bandeja" description="Todas las conversaciones de WhatsApp. En rojo, las que necesitan a una persona." actions={<WorkerBadge />} />
       <nav className="flex gap-2 text-sm">
         {[["", "Todas"], ["atencion", "Necesitan atención"], ["humano", "En modo humano"]].map(([v, l]) => (
           <Link key={v} href={v ? `/bandeja?f=${v}` : "/bandeja"}
-            className={`rounded-full border px-3 py-1 ${f === v ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white"}`}>{l}</Link>
+            className={`rounded-full border px-3 py-1 ${f === v ? "border-emerald-700 bg-emerald-700 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"}`}>{l}</Link>
         ))}
       </nav>
       {error && <p className="text-sm text-red-700">No se pudo cargar la bandeja.</p>}
-      <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <ul className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
         {rows.map((r) => {
           const last = r.messages[0];
           const preview = last ? (last.body || KIND_LABEL[last.kind] || "") : "";

@@ -1,7 +1,8 @@
+import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
 import { computeSignals, profileFromRow, publishedScoringRules, scoreLead } from "@inmo/core";
 import { LeadCard } from "@/components/lead-card";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 import { contactLabel, phonePretty, timeAgo } from "@/lib/format";
 import { showValue, windowInfo } from "@/lib/lead-format";
 import { RefreshLeadButton } from "./lead-buttons";
@@ -14,7 +15,7 @@ type Contact = { id: string; phone: string; name: string | null; display_name: s
   conversations: { id: string; last_message_at: string | null; needs_attention: boolean; mode: "ai" | "human" }[] };
 
 export default async function Leads() {
-  const sb = await serverClient();
+  const sb = await ownerClient();
   const [{ data: rows }, { data: sig }, rules, { data: convs }] = await Promise.all([
     sb.from("lead_profiles").select("*, contact:contacts(id, phone, name, display_name, is_test, conversations(id, last_message_at, needs_attention, mode))"),
     sb.from("lead_signals").select("contact_id, signal"),
@@ -40,13 +41,8 @@ export default async function Leads() {
   const pending = (convs ?? []).filter((c) => !withProfile.has(c.contact_id)).slice(0, 20);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold">A quién llamar</h1>
-        <p className="text-sm text-zinc-500">
-          Ordenados por puntaje (reglas versión {rules.version}). Cada dato muestra la frase del cliente que lo respalda.
-        </p>
-      </header>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader title="A quién llamar" description={`Ordenados por puntaje (reglas versión ${rules.version}). Cada dato muestra la frase del cliente que lo respalda.`} />
 
       <ol className="space-y-3">
         {leads.map((l) => {
@@ -54,7 +50,7 @@ export default async function Leads() {
           const summary = [l.profile.property_type, l.profile.zones, l.profile.budget_max]
             .map((e, i) => (e ? showValue((["property_type", "zones", "budget_max"] as const)[i], e.value, l.profile) : null)).filter(Boolean).join(" · ");
           return (
-            <li key={l.contact.id} className="rounded-lg border border-zinc-200 bg-white">
+            <li key={l.contact.id} className="rounded-xl border border-zinc-200 bg-white shadow-sm">
               <details>
                 <summary className="flex cursor-pointer items-start gap-3 p-3">
                   <span className={`mt-0.5 w-10 shrink-0 rounded text-center text-sm font-semibold ${l.score >= 60 ? "bg-emerald-600 text-white" : l.score >= 30 ? "bg-emerald-100 text-emerald-900" : "bg-zinc-100 text-zinc-600"}`}>{l.score}</span>
@@ -84,7 +80,7 @@ export default async function Leads() {
       {pending.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-zinc-600">Chats sin ficha</h2>
-          <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white text-sm">
+          <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white shadow-sm text-sm">
             {pending.map((c) => {
               const ct = c.contact as unknown as { phone: string; name: string | null; display_name: string | null; is_test: boolean };
               return (

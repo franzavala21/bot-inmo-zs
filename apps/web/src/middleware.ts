@@ -1,9 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Rutas públicas declaradas. Todo lo demás exige sesión de un dueño.
+// Rutas públicas declaradas. Todo lo demás exige sesión.
 const PUBLIC = ["/login", "/auth/callback", "/api/inbound", "/api/cron", "/api/whatsapp/meta", "/api/health", "/privacidad"];
 
+/**
+ * Solo enruta y renueva la sesión: sin sesión → login. NO es el control de acceso:
+ * cada página verifica con ownerClient() (getUser + lista de dueños), cada acción con requireOwner(),
+ * y la base filtra por RLS. Así el middleware no consulta a Auth en cada navegación (~600 ms desde Argentina).
+ */
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   if (PUBLIC.some((p) => path === p || path.startsWith(p + "/"))) return NextResponse.next();
@@ -19,9 +24,9 @@ export async function middleware(req: NextRequest) {
       },
     },
   });
-  const { data: { user } } = await sb.auth.getUser();
-  const allowed = (process.env.ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());
-  if (!user?.email || !allowed.includes(user.email.toLowerCase())) {
+  // Lee la sesión de la cookie; solo va a la red si el token venció (lo renueva, una vez por hora).
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
     if (path.startsWith("/api/")) return NextResponse.json({ error: "no autorizado" }, { status: 401 });
     return NextResponse.redirect(new URL("/login", req.url));
   }

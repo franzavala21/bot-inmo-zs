@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminClient, computeSignals, profileFromRow, publishedScoringRules, scoreLead, SERVICE_WINDOW_MS } from "@inmo/core";
 import { LeadCard } from "@/components/lead-card";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { contactLabel, KIND_LABEL, phonePretty, timeShort } from "@/lib/format";
 import { Composer } from "./composer";
@@ -36,7 +36,7 @@ const STATUS_LABEL: Record<string, string> = { pending: "En cola", sending: "Env
 
 export default async function Chat({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const sb = await serverClient();
+  const sb = await ownerClient();
   const [{ data: conv }, { data: msgs }] = await Promise.all([
     sb.from("conversations").select("id, mode, needs_attention, attention_reason, channel_id, contact_id, contact:contacts(phone, name, display_name, is_test)").eq("id", id).maybeSingle(),
     sb.from("messages").select("id, author, kind, body, media_path, transcript, created_at, outbound_messages(id, status, error)")
@@ -75,7 +75,7 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
   const contact = conv.contact as unknown as { phone: string; name: string | null; display_name: string | null; is_test: boolean } | null;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-2rem)] max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 md:h-[calc(100vh-3rem)]">
+    <div className="mx-auto flex h-[calc(100dvh-6.5rem)] max-w-3xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 shadow-sm md:h-[calc(100dvh-4rem)]">
       <RealtimeRefresh tables={["messages", "conversations", "outbound_messages"]} />
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white p-3">
         <div className="min-w-0">

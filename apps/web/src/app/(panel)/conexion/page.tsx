@@ -1,13 +1,14 @@
+import { PageHeader } from "@/components/page-header";
 import QRCode from "qrcode";
 import { MetaClient, metaConfigFromEnv } from "@inmo/core";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { phonePretty, timeAgo } from "@/lib/format";
 import { STATE_UI, workerState } from "./worker-badge";
 import { BotToggle } from "./bot-toggle";
 
 export default async function Conexion() {
-  const sb = await serverClient();
+  const sb = await ownerClient();
   const { data: channels } = await sb.from("channels")
     .select("id, slug, name, phone, active, transport, meta_phone_number_id, worker_status, worker_qr, worker_heartbeat_at, bot_enabled").order("created_at");
   const rows = await Promise.all((channels ?? []).map(async (c) => {
@@ -17,12 +18,12 @@ export default async function Conexion() {
   }));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-4xl space-y-4">
       <RealtimeRefresh tables={["channels"]} />
-      <h1 className="text-2xl font-semibold">Conexión de WhatsApp</h1>
+      <PageHeader title="Conexión de WhatsApp" description="Estado del número, del bot y de la calidad del número en Meta." />
       {rows.map(({ c, s, qrSvg, meta }) => {
         return (
-          <section key={c.id} className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4">
+          <section key={c.id} className="space-y-3 rounded-xl border border-zinc-200 bg-white shadow-sm p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="font-semibold">{c.name}</div>

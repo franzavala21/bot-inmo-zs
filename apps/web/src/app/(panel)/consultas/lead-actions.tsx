@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { contactPortalLead, dismissPortalLead, refreshPortalLeads } from "./actions";
 
 export function RefreshButton() {
@@ -46,4 +47,17 @@ export function LeadActions({ leadId, preview, blocked }: { leadId: string; prev
       </div>
     </div>
   );
+}
+
+/** Trae lo nuevo de Tokko en segundo plano y refresca la lista (la página ya se mostró con lo guardado). */
+export function AutoSync() {
+  const router = useRouter();
+  const [state, setState] = useState<"loading" | "error" | "done">("loading");
+  useEffect(() => {
+    let alive = true;
+    refreshPortalLeads().then((r) => { if (!alive) return; setState(r.ok ? "done" : "error"); if (r.ok) router.refresh(); });
+    return () => { alive = false; };
+  }, [router]);
+  if (state === "done") return null;
+  return <p className={`text-sm ${state === "error" ? "text-red-700" : "text-zinc-500"}`}>{state === "error" ? "No se pudo actualizar desde Tokko: se muestra lo último guardado." : "Buscando consultas nuevas en Tokko…"}</p>;
 }

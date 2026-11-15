@@ -1,6 +1,7 @@
+import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
 import { PROPERTY_TEMPLATE, PUBLIC_COLUMNS, renderTemplate, SERVICE_WINDOW_MS, templateParams, type PublicRow } from "@inmo/core";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 import { contactLabel, timeAgo } from "@/lib/format";
 import { DraftActions } from "./draft-card";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 type Contact = { name: string | null; display_name: string | null; phone: string; is_test: boolean; proactive_opt_out: boolean };
 
 export default async function Avisos() {
-  const sb = await serverClient();
+  const sb = await ownerClient();
   const { data: drafts } = await sb.from("outbound_drafts")
     .select("id, body, status, created_at, decided_at, contact_id, conversation_id, property_id, match:property_matches(reasons), contact:contacts(name, display_name, phone, is_test, proactive_opt_out)")
     .order("created_at", { ascending: false }).limit(100);
@@ -45,19 +46,14 @@ export default async function Avisos() {
   }).sort((a, b) => b.score - a.score);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Avisos</h1>
-        <p className="text-sm text-zinc-500">
-          Cuando entra una propiedad que coincide con lo que alguien busca, queda acá un aviso. Nada sale sin que lo apruebes, de a uno.
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader title="Avisos" description={<>Cuando entra una propiedad que coincide con lo que alguien busca, queda acá un aviso. Nada sale sin que lo apruebes, de a uno.
           Dentro de las 24 h de su último mensaje sale como texto (lo podés editar); después, como la plantilla «{PROPERTY_TEMPLATE.name}» de Meta,
-          solo a quien aceptó recibir avisos.
-        </p>
-      </header>
+          solo a quien aceptó recibir avisos.</>} />
 
       <ol className="space-y-3">
         {items.map(({ d, prop, contact, mode, why, score, body, reasons }) => (
-          <li key={d.id} className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3">
+          <li key={d.id} className="space-y-2 rounded-xl border border-zinc-200 bg-white shadow-sm p-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div className="font-medium">
                 {contact ? contactLabel(contact) : "?"}
@@ -86,7 +82,7 @@ export default async function Avisos() {
       {decided.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-zinc-600">Últimos decididos</h2>
-          <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white text-sm">
+          <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white shadow-sm text-sm">
             {decided.map((d) => (
               <li key={d.id} className="flex justify-between gap-2 p-2">
                 <Link href={`/bandeja/${d.conversation_id}`} className="truncate">{contactLabel(d.contact as unknown as Contact)}</Link>

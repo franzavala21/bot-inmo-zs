@@ -1,5 +1,6 @@
+import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 import { contactLabel } from "@/lib/format";
 import { VisitForm, VisitStatusButtons } from "./visit-form";
 
@@ -17,7 +18,7 @@ type C = { id: string; name: string | null; display_name: string | null; phone: 
 
 export default async function Agenda({ searchParams }: { searchParams: Promise<{ contacto?: string }> }) {
   const { contacto } = await searchParams;
-  const sb = await serverClient();
+  const sb = await ownerClient();
   const since = new Date(Date.now() - 7 * 86400_000).toISOString();
   const [{ data: visits }, { data: contacts }, { data: props }] = await Promise.all([
     sb.from("visits").select("id, starts_at, status, notes, contact:contacts(id, name, display_name, phone, conversations(id)), property:properties(reference_code, title, zone)")
@@ -49,17 +50,14 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold">Agenda de visitas</h1>
-        <p className="text-sm text-zinc-500">La cargan ustedes. El bot nunca confirma visitas: cuando alguien pide visitar, pasa el chat a una persona.</p>
-      </header>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader title="Agenda de visitas" description="La cargan ustedes. El bot nunca confirma visitas: cuando alguien pide visitar, pasa el chat a una persona." />
       <VisitForm defaultContact={contacto}
         contacts={(contacts ?? []).map((c) => ({ id: c.id, label: `${contactLabel(c)}${c.is_test ? " (prueba)" : ""}` }))}
         properties={(props ?? []).map((p) => ({ id: p.id, label: `${p.reference_code} · ${p.property_type} · ${p.zone ?? ""}` }))} />
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-zinc-600">Próximas</h2>
-        <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
+        <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white shadow-sm">
           {upcoming.map(row)}
           {upcoming.length === 0 && <li className="p-3 text-sm text-zinc-500">No hay visitas agendadas.</li>}
         </ul>
@@ -67,7 +65,7 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
       {past.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-zinc-600">Últimos 7 días</h2>
-          <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">{past.map(row)}</ul>
+          <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white shadow-sm">{past.map(row)}</ul>
         </section>
       )}
     </div>

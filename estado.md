@@ -220,3 +220,15 @@
 - [x] `0009_portal_leads.sql` aplicada.
 - 2026-11-14: Tokko completa `deleted_at` con una fecha en todos los contactos, también los activos (los borrados están en otro recurso, `deletedcontact`). Se sacó ese filtro. Primera sincronización: 63 consultas (31 Mercadolibre, 27 Zonaprop, 1 Proppit, 4 sin origen; 40 venta, 19 alquiler; 58 con teléfono válido).
 - La API v1 de Tokko NO expone la propiedad consultada. Recursos disponibles: branch, contact, contact_tag, countries, country, deletedcontact, development, development_type, inactiveproperty, location, operations, photo, property, property_custom_tag, property_tag, property_type, signed_operations, state, user, webcontact. Para saber la propiedad: emails de aviso (portales o Tokko).
+
+## Panel más rápido y diseño nuevo (2026-11-14)
+- **Por qué tardaba:** el middleware corre en el borde (gru1, San Pablo) y en cada navegación llamaba a `auth.getUser()` en Supabase (us-east-2, Ohio): ~600 ms medidos desde Argentina. Además, `/consultas` esperaba a Tokko antes de mostrar, y no había pantalla de carga.
+- **Cambios:**
+  - El middleware solo lee la sesión de la cookie (`getSession`, sin red salvo para renovar) y manda al login si no hay sesión.
+  - La verificación real pasa a cada página con `ownerClient()` (`getUser` + lista de dueños, con `cache()` para que sea una sola vez por pedido) y a cada acción con `requireOwner()`. RLS sigue filtrando.
+  - Funciones en `cle1` (Cleveland), al lado de la base. Antes estaban en `iad1`.
+  - `loading.tsx` con esqueleto para que el cambio de pantalla se vea al instante. `/consultas` muestra lo guardado y trae Tokko en segundo plano.
+- **Diseño:**
+  - Barra lateral con marca, íconos, grupos (Clientes / Inmobiliaria / Sistema), pantalla activa resaltada y contadores en Suspense: chats que necesitan atención (rojo), consultas nuevas y avisos pendientes.
+  - Abajo, el estado del bot y "Salir" (antes no había forma de cerrar sesión). En el celular, barra superior con menú desplegable.
+  - Encabezado común (`PageHeader`) en todas las pantallas y login con la marca. Se sacó "Reglas" del menú (no está hecho).

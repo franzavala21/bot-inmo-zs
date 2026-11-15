@@ -1,12 +1,12 @@
+import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { adminClient, PORTAL_TEMPLATE, portalTemplateParams, renderPortalTemplate, SERVICE_WINDOW_MS, syncPortalLeads } from "@inmo/core";
-import { serverClient } from "@/lib/supabase/server";
+import { PORTAL_TEMPLATE, portalTemplateParams, renderPortalTemplate, SERVICE_WINDOW_MS } from "@inmo/core";
+import { ownerClient } from "@/lib/supabase/server";
 import { phonePretty, timeAgo } from "@/lib/format";
-import { LeadActions, RefreshButton } from "./lead-actions";
+import { AutoSync, LeadActions, RefreshButton } from "./lead-actions";
 
 // Consultas que entran a Tokko desde los portales. Se escriben de a una, con aprobación (plantilla de Meta).
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 const STALE_MS = 5 * 60_000;
 
 const TABS = { new: "Nuevas", contacted: "Contactadas", dismissed: "Descartadas" } as const;
@@ -15,14 +15,11 @@ const ORIGIN_CLS: Record<string, string> = { Zonaprop: "bg-orange-50 text-orange
 export default async function Consultas({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
   const { ver } = await searchParams;
   const tab = (ver && ver in TABS ? ver : "new") as keyof typeof TABS;
-  const sb = await serverClient();
+  const sb = await ownerClient();
 
-  // Si la última actualización tiene más de 5 minutos, se trae lo nuevo de Tokko al abrir.
+  // Si la última actualización tiene más de 5 minutos, se muestra lo guardado y se trae lo nuevo de Tokko en segundo plano.
   const { data: last } = await sb.from("portal_leads").select("synced_at").order("synced_at", { ascending: false }).limit(1).maybeSingle();
-  let syncError = false;
-  if (!last || Date.now() - new Date(last.synced_at).getTime() > STALE_MS) {
-    try { await syncPortalLeads(adminClient(), process.env.TOKKO_API_KEY!); } catch { syncError = true; }
-  }
+  const stale = !last || Date.now() - new Date(last.synced_at).getTime() > STALE_MS;
 
   const { data: leads } = await sb.from("portal_leads")
     .select("id, name, phone, phone_raw, email, origin, operation, property_type, zones, tokko_status, tokko_created_at, status, conversation_id, decided_at, contact:contacts(proactive_opt_out)")
@@ -39,22 +36,15 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
   for (const m of lastMsgs ?? []) if (!lastClient.has(m.conversation_id)) lastClient.set(m.conversation_id, m.created_at);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold">Consultas de portales</h1>
-          <p className="text-sm text-zinc-500">
-            Lo que entra a Tokko (Zonaprop, Mercadolibre, web). Escribirle manda la plantilla «{PORTAL_TEMPLATE.name}» desde el número del bot;
-            si responde, el bot sigue la charla y lo califica.
-          </p>
-          {syncError && <p className="text-sm text-red-700">No se pudo actualizar desde Tokko: se muestra lo último guardado.</p>}
-        </div>
-        <RefreshButton />
-      </header>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <PageHeader title="Consultas de portales" actions={<RefreshButton />}
+        description={<>Lo que entra a Tokko (Zonaprop, Mercadolibre, web). Escribirle manda la plantilla «{PORTAL_TEMPLATE.name}» desde el número del bot;
+          si responde, el bot sigue la charla y lo califica.</>} />
+      {stale && <AutoSync />}
 
       <nav className="flex gap-1 text-sm">
         {(Object.keys(TABS) as (keyof typeof TABS)[]).map((k) => (
-          <Link key={k} href={`/consultas?ver=${k}`} className={`rounded-md px-3 py-1.5 ${tab === k ? "bg-zinc-900 text-white" : "border border-zinc-300 bg-white"}`}>
+          <Link key={k} href={`/consultas?ver=${k}`} className={`rounded-full border px-3 py-1 ${tab === k ? "border-emerald-700 bg-emerald-700 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"}`}>
             {TABS[k]} ({count(k)})
           </Link>
         ))}
@@ -73,7 +63,7 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
             : null;
           const what = [l.operation === "rent" ? "Alquiler" : l.operation === "sale" ? "Compra" : null, l.property_type, zones.join(", ")].filter(Boolean).join(" · ");
           return (
-            <li key={l.id} className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3">
+            <li key={l.id} className="space-y-2 rounded-xl border border-zinc-200 bg-white shadow-sm p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="font-medium">
                   {l.name ?? "Sin nombre"}

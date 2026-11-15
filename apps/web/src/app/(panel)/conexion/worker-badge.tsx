@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 
 export type WorkerState = "online" | "qr" | "reconnecting" | "down" | "meta";
 
@@ -22,7 +22,7 @@ export const STATE_UI: Record<WorkerState, { label: string; cls: string }> = {
 };
 
 export async function WorkerBadge() {
-  const sb = await serverClient();
+  const sb = await ownerClient();
   const { data: c } = await sb.from("channels").select("transport, worker_status, worker_qr, worker_heartbeat_at").eq("slug", "ventas").maybeSingle();
   const s = c ? workerState(c) : "down";
   return (

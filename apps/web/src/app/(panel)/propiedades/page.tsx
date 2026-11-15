@@ -1,5 +1,6 @@
+import { PageHeader } from "@/components/page-header";
 import { searchProperties, parseRooms } from "@inmo/core";
-import { serverClient } from "@/lib/supabase/server";
+import { ownerClient } from "@/lib/supabase/server";
 import { syncNow } from "./actions";
 import { InterestedButton } from "./interested-button";
 
@@ -8,7 +9,7 @@ const fmt = (n: number | null, cur: string | null) =>
 
 export default async function Propiedades({ searchParams }: { searchParams: Promise<{ q?: string; op?: string }> }) {
   const { q = "", op = "" } = await searchParams;
-  const sb = await serverClient();
+  const sb = await ownerClient();
   const items = await searchProperties(sb, {
     text: q || undefined,
     operation: op === "sale" || op === "rent" ? op : undefined,
@@ -18,18 +19,14 @@ export default async function Propiedades({ searchParams }: { searchParams: Prom
   const { data: lastRun } = await sb.from("tokko_sync_runs").select("*").order("started_at", { ascending: false }).limit(1).maybeSingle();
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Propiedades</h1>
-        <form action={async () => { "use server"; await syncNow(); }}>
-          <button className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50">Sincronizar con Tokko</button>
-        </form>
-      </div>
-      <p className="text-sm text-zinc-500">
-        {lastRun ? (lastRun.error ? `Última sincronización con error: ${lastRun.error}` :
-          `Última sincronización: ${new Date(lastRun.started_at).toLocaleString("es-AR")} · ${lastRun.fetched ?? "…"} propiedades`) :
+    <div className="mx-auto max-w-6xl space-y-4">
+      <PageHeader title="Propiedades"
+        description={lastRun ? (lastRun.error ? `Última sincronización con error: ${lastRun.error}` :
+          `Desde Tokko. Última sincronización: ${new Date(lastRun.started_at).toLocaleString("es-AR", { timeZone: "America/Argentina/Cordoba" })} · ${lastRun.fetched ?? "…"} propiedades`) :
           "Todavía no se sincronizó."}
-      </p>
+        actions={<form action={async () => { "use server"; await syncNow(); }}>
+          <button className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50">Sincronizar con Tokko</button>
+        </form>} />
       <form className="flex flex-wrap gap-2">
         <input name="q" defaultValue={q} placeholder="Ej: depto 2 amb palermo" className="min-w-0 flex-1 rounded-md border border-zinc-300 px-3 py-2" />
         <select name="op" defaultValue={op} className="rounded-md border border-zinc-300 px-2 py-2">
@@ -39,7 +36,7 @@ export default async function Propiedades({ searchParams }: { searchParams: Prom
       </form>
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((p) => (
-          <li key={p.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+          <li key={p.id} className="rounded-xl border border-zinc-200 bg-white shadow-sm p-4">
             <div className="text-xs text-zinc-500">{p.reference_code} · {p.property_type} · {p.operation === "rent" ? "Alquiler" : "Venta"}</div>
             <div className="font-medium">{p.title}</div>
             <div className="text-sm text-zinc-600">{p.zone}{p.rooms ? ` · ${p.rooms} amb` : ""}{p.surface_total ? ` · ${p.surface_total} m²` : ""}</div>
