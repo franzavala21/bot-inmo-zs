@@ -302,3 +302,15 @@
 - **Arreglo:** el servidor corre en UTC y las horas del panel se formateaban con esa zona. Ahora todo usa America/Argentina/Cordoba y formato de 24 h (`lib/format.ts`).
 - Verificado con capturas locales (Chrome headless con una sesión de dueño generada por admin, sin email) en escritorio y celular. Las capturas detectaron un import faltante que el compilador no marcó.
 - Componentes comunes: `components/ui.tsx` (Avatar, Pill, StatCard, Panel, EmptyState).
+
+## "¿Tenés otras opciones?" terminaba derivado (2026-11-16)
+- Bitácora del caso:
+  - "60000dolares" → `price_min 60000, price_max 60000` (búsqueda exacta, sin resultados) → mostró las más baratas (32 y 36 mil).
+  - "Tenes otras opciones?" repitió una ya mostrada.
+  - El verificador marcó dos veces «Casa 2 dormitorios, terreno 233 m², escritura inmediata, USD 59.000» (todo está en la ficha) → derivó.
+- Arreglos:
+  - **Verificador:** `supportedByFacts` también descarta la objeción si cada palabra con contenido Y cada número de la cita están en UNA MISMA ficha (no se mezclan fichas). Acepta singular/plural y género ("apta" con "Apto crédito").
+  - **Presupuesto:** si `price_min == price_max`, es tope (sin mínimo). Antes de soltar el precio se busca hasta +25 % (con nota).
+  - **No repetir:** la búsqueda excluye los códigos ya mostrados en el chat (`shownCodes`, hasta 15). Si no queda nada distinto, la nota lo dice y propone ampliar.
+- `bot-try`: `otras_opciones` 3/3 con propiedades nuevas; `presupuesto_60` muestra 59, 50 y 60 mil.
+- Bandeja: puntaje del lead al lado del nombre (`lead_scores`).

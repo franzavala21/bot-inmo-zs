@@ -12,6 +12,8 @@ export interface SearchFilters {
   priceMax?: number;
   currency?: string;
   pets?: boolean;
+  /** Códigos que no hay que volver a mostrar (ya se le mostraron en este chat). */
+  excludeCodes?: string[];
   limit?: number;
 }
 
@@ -56,6 +58,8 @@ export async function searchProperties(db: SupabaseClient, f: SearchFilters) {
   if (f.priceMax) q = q.lte("price", f.priceMax);
   if (f.currency) q = q.eq("currency", f.currency);
   if (f.pets === true) q = q.or("pets_allowed.is.null,pets_allowed.eq.true");
+  const ex = (f.excludeCodes ?? []).filter((c) => /^[A-Z0-9]{3,20}$/.test(c));
+  if (ex.length) q = q.not("reference_code", "in", `(${ex.join(",")})`);
   if (f.text) {
     const terms = normalize(f.text).split(" ").filter((t) => t.length > 2).slice(0, 5);
     for (const t of terms) q = q.ilike("search_text", `%${t}%`);

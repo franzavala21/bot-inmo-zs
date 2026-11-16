@@ -44,6 +44,8 @@ export interface TurnInput {
   clientName?: string | null;
   /** Preguntas de calificación que el bot ya hizo en este chat ("type", "budget", "credit"): no se repiten. */
   asked?: string[];
+  /** Códigos ya mostrados en este chat: no se repiten en una búsqueda nueva. */
+  shownCodes?: string[];
   /** Lo que ya se sabe del lead por su ficha (para no preguntarlo de nuevo). */
   lead?: { financing?: string | null; purpose?: string | null; rooms_min?: number | null; wants_alerts?: boolean | null };
 }

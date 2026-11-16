@@ -10,7 +10,7 @@ import { Avatar, EmptyState, Pill } from "@/components/ui";
 import { Icon } from "@/components/icons";
 
 type Row = {
-  id: string; mode: "ai" | "human"; needs_attention: boolean; attention_reason: string | null; last_message_at: string;
+  id: string; contact_id: string; mode: "ai" | "human"; needs_attention: boolean; attention_reason: string | null; last_message_at: string;
   contact: { phone: string; name: string | null; display_name: string | null; is_test: boolean } | null;
   messages: { author: string; kind: string; body: string | null; created_at: string }[];
 };
@@ -21,7 +21,7 @@ export default async function Bandeja({ searchParams }: { searchParams: Promise<
   // Seguimientos en segundo plano (no frena la bandeja).
   after(() => runFollowUps(adminClient()).catch(() => null));
   let q = sb.from("conversations")
-    .select("id, mode, needs_attention, attention_reason, last_message_at, contact:contacts(phone, name, display_name, is_test), messages(author, kind, body, created_at)")
+    .select("id, contact_id, mode, needs_attention, attention_reason, last_message_at, contact:contacts(phone, name, display_name, is_test), messages(author, kind, body, created_at)")
     .order("last_message_at", { ascending: false })
     .order("created_at", { referencedTable: "messages", ascending: false })
     .limit(1, { referencedTable: "messages" })
@@ -38,6 +38,10 @@ export default async function Bandeja({ searchParams }: { searchParams: Promise<
     const hay = `${r.contact ? contactLabel(r.contact) : ""} ${r.contact?.phone ?? ""}`.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
     return hay.includes(term) || hay.replace(/\D/g, "").includes(term.replace(/\D/g, "") || "~");
   });
+  // Puntaje de cada lead (el último calculado al leer su ficha), para verlo antes de entrar.
+  const ids = [...new Set(rows.map((r) => r.contact_id))];
+  const { data: scores } = ids.length ? await sb.from("lead_scores").select("contact_id, score").in("contact_id", ids) : { data: [] };
+  const scoreBy = new Map((scores ?? []).map((x) => [x.contact_id as string, x.score as number]));
   const FILTERS = [["", "Todas"], ["atencion", "Necesitan atención"], ["sin-responder", "Sin responder"], ["humano", "En modo humano"]];
 
   return (
@@ -78,7 +82,14 @@ export default async function Bandeja({ searchParams }: { searchParams: Promise<
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className={`truncate ${waiting || r.needs_attention ? "font-semibold text-zinc-900" : "font-medium text-zinc-800"}`}>{name}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className={`truncate ${waiting || r.needs_attention ? "font-semibold text-zinc-900" : "font-medium text-zinc-800"}`}>{name}</span>
+                        {scoreBy.has(r.contact_id) && (
+                          <span title="Puntaje del lead" className={`shrink-0 rounded-md px-1.5 text-xs font-semibold tabular-nums leading-5 ${scoreBy.get(r.contact_id)! >= 60 ? "bg-emerald-600 text-white" : scoreBy.get(r.contact_id)! >= 30 ? "bg-emerald-100 text-emerald-900" : "bg-zinc-100 text-zinc-600"}`}>
+                            {scoreBy.get(r.contact_id)}
+                          </span>
+                        )}
+                      </span>
                       <span className={`shrink-0 text-xs ${waiting ? "font-medium text-amber-700" : "text-zinc-400"}`}>{timeAgo(r.last_message_at)}</span>
                     </div>
                     <div className="truncate text-sm text-zinc-500">

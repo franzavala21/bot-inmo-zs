@@ -13,7 +13,9 @@ const b = (text: string): HistoryMsg => ({ author: "ai", kind: "text", text, at:
 // Casos con nombre de pila conocido (el resto, sin nombre: el bot no tiene que usar ninguno).
 const NAMES: Record<string, string> = { saludo: "Martina", busqueda: "Pedro", luca: "Luca", luca_sigue: "Luca", permiso: "Ana" };
 // Casos donde el bot ya preguntó el tipo en el turno anterior (en producción sale de la bitácora).
-const ASKED: Record<string, string[]> = { luca_casa: ["type", "budget"], luca_igual: ["type", "budget"], califica_credito: ["budget", "credit"], califica_contado: ["budget", "credit"], califica_no_sabe: ["budget", "credit"], permiso: ["budget", "credit", "sell", "purpose", "bedrooms", "name"] };
+// Códigos ya mostrados (en producción salen de la bitácora).
+const SHOWN: Record<string, string[]> = { otras_opciones: ["ZHO6902570", "ZHO9312672", "ZHO9477587"] };
+const ASKED: Record<string, string[]> = { otras_opciones: ["budget", "credit", "sell", "purpose"], luca_casa: ["type", "budget"], luca_igual: ["type", "budget"], califica_credito: ["budget", "credit"], califica_contado: ["budget", "credit"], califica_no_sabe: ["budget", "credit"], permiso: ["budget", "credit", "sell", "purpose", "bedrooms", "name"] };
 
 const CASES: Record<string, HistoryMsg[]> = {
   saludo: [c("Hola buenas tardes")],
@@ -38,6 +40,11 @@ const CASES: Record<string, HistoryMsg[]> = {
   seguimiento: [c("Busco casa en Salsipuedes hasta 100 mil dólares, de contado")],
   // Ya respondió todo lo demás: le toca la pregunta de permiso para avisos.
   permiso: [c("Busco casa en Salsipuedes de 2 dormitorios hasta 100 mil dólares, de contado, para vivir. No tengo que vender nada")],
+  // Caso real 2026-11-16: "60000 dolares" se tomó como precio exacto y "¿otras opciones?" terminó derivado por el verificador.
+  presupuesto_60: [c("Hola quiero comprar una casa en Salsipuedes"), b("Hola! Mi nombre es Francisco! ¿Con qué presupuesto aproximado contás y pensás comprar con crédito hipotecario o de contado?"), c("60000dolares, contado")],
+  otras_opciones: [c("Hola quiero comprar una casa en Salsipuedes"), b("Hola! Mi nombre es Francisco! ¿Con qué presupuesto aproximado contás y pensás comprar con crédito hipotecario o de contado?"), c("60000dolares"),
+    b("Con ese presupuesto te puedo mostrar estas casas en Salsipuedes: 1) Casa de 2 dormitorios por USD 32.000. 2) Casa de 2 dormitorios por USD 36.000. ¿Tenés que vender alguna propiedad para poder comprar?"),
+    c("Contado"), b("Perfecto. ¿La casa la buscás para vivir, para fines de semana o como inversión?"), c("Tenes otras opciones?")],
   // Calificación: antes de mostrar, presupuesto y (si es vivienda) crédito.
   califica: [c("Hola, busco casa en Salsipuedes")],
   califica_credito: [c("Hola, busco casa en Salsipuedes"), b("¿Con qué presupuesto contás y la comprarías con crédito hipotecario o de contado?"), c("hasta 90 mil dólares, con crédito")],
@@ -59,7 +66,7 @@ async function main() {
     if (only && name !== only) continue;
     const t0 = Date.now();
     const d = await decide(
-      { history, channelOperation: "sale", rules: (rv?.rules ?? []) as Rule[], businessInfo: [], recentlyShown: [], clientName: NAMES[name] ?? null, asked: ASKED[name] ?? [] },
+      { history, channelOperation: "sale", rules: (rv?.rules ?? []) as Rule[], businessInfo: [], recentlyShown: [], clientName: NAMES[name] ?? null, asked: ASKED[name] ?? [], shownCodes: SHOWN[name] ?? [] },
       {
         llm,
         search: async (f) => (await searchProperties(db, f)) as unknown as PublicRow[],

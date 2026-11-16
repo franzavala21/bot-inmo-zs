@@ -99,7 +99,7 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
       db.from("rules_versions").select("rules").eq("published", true).order("version", { ascending: false }).limit(1).maybeSingle(),
       db.from("business_info").select("key, title, body").neq("body", "").order("sort"),
       db.from("audit_log").select("details").eq("conversation_id", conversationId).in("event", ["sent", "sent_handoff"])
-        .order("created_at", { ascending: false }).limit(3),
+        .order("created_at", { ascending: false }).limit(8),
       db.from("lead_profiles").select("name, financing, purpose, rooms_min, wants_alerts").eq("contact_id", conv.contact_id).maybeSingle(),
     ]);
     // Preguntas de calificación que el bot ya hizo en este chat (para no repetirlas).
@@ -111,7 +111,8 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
     }))];
     const contact = conv.contact as unknown as { name: string | null; display_name: string | null } | null;
     const clientName = clientFirstName({ name: contact?.name, profileName: (lead?.name as { value?: string } | null)?.value, displayName: contact?.display_name });
-    const shownCodes = [...new Set((lastSent ?? []).flatMap((a) => ((a.details as { property_codes?: string[] } | null)?.property_codes ?? [])))].slice(0, 3);
+    const allShown = [...new Set((lastSent ?? []).flatMap((a) => ((a.details as { property_codes?: string[] } | null)?.property_codes ?? [])))];
+    const shownCodes = allShown.slice(0, 3);
     let recentlyShown: ReturnType<typeof toFact>[] = [];
     if (shownCodes.length) {
       const { data } = await db.from("properties_public").select(PUBLIC_COLUMNS).in("reference_code", shownCodes);
@@ -120,7 +121,7 @@ export async function runBotTurn(db: SupabaseClient, conversationId: string, mes
 
     const llm = opts.llm ?? new OpenAiLlm();
     const decision = await decide(
-      { history, channelOperation, rules: (rv?.rules ?? []) as Rule[], businessInfo: (bi ?? []) as BusinessInfo[], recentlyShown, clientName, asked,
+      { history, channelOperation, rules: (rv?.rules ?? []) as Rule[], businessInfo: (bi ?? []) as BusinessInfo[], recentlyShown, shownCodes: allShown.slice(0, 15), clientName, asked,
         lead: { financing: (lead?.financing as { value?: string } | null)?.value ?? null, purpose: (lead?.purpose as { value?: string } | null)?.value ?? null,
           rooms_min: (lead?.rooms_min as { value?: number } | null)?.value ?? null,
           wants_alerts: (lead?.wants_alerts as { value?: boolean } | null)?.value ?? null } },

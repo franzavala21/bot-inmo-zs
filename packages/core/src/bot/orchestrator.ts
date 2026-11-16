@@ -51,17 +51,34 @@ const LEAD_WORDS = new Set(["con", "y", "e", "es", "son", "tiene", "tienen", "cu
  * Se descarta la objeción si CADA parte de la cita (separada por comas o "y") aparece seguida, palabra por palabra,
  * en los valores de las fichas o de la info del negocio. Los "no hay / no tengo" los controla claimsNoneWithoutSupport.
  */
-export function supportedByFacts(quote: string, factsText: string): boolean {
+export function supportedByFacts(quote: string, factsTexts: string | string[]): boolean {
   const n = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9ñ ,]+/g, " ").replace(/\s+/g, " ").trim();
-  const q = n(quote);
+  const q = n(quote.replace(/(^|\s)\d{1,2}[).]\s/g, " ")); // sin numeradores de lista ("1) Casa…")
   if (/\b(no (tengo|hay|tenemos|cuento|dispongo)|con exactamente eso no)\b/.test(q)) return true;
-  const facts = ` ${n(factsText).replace(/,/g, " ")} `;
+  const texts = (Array.isArray(factsTexts) ? factsTexts : [factsTexts]).map((t) => ` ${n(t).replace(/,/g, " ")} `);
   const parts = q.split(/,| y /).map((p) => p.trim().split(" ").filter(Boolean)).map((w) => {
     while (w.length && LEAD_WORDS.has(w[0])) w.shift();
     return w.join(" ");
   }).filter((p) => p.length >= 3);
-  return parts.length > 0 && parts.every((p) => facts.includes(` ${p} `));
+  if (!parts.length) return false;
+  // a) Cada parte aparece tal cual en una misma ficha.
+  if (texts.some((f) => parts.every((p) => f.includes(` ${p} `)))) return true;
+  // b) Una ficha descripta con sus datos ("Casa 2 dormitorios, terreno 233 m², escritura inmediata, USD 59.000"):
+  //    los números los controla checkNumbers; acá alcanza con que cada palabra con contenido esté en UNA misma ficha.
+  //    Los números de la cita también tienen que estar en ESA ficha (si no, se mezclarían datos de dos propiedades).
+  const tokens = q.split(/[ ,]+/).filter(Boolean);
+  const words = [...new Set(tokens.filter((w) => w.length >= 3 && !/\d/.test(w) && !STRUCTURE_WORDS.has(w)))];
+  const nums = [...new Set(tokens.filter((w) => /^\d+$/.test(w)))];
+  // Singular/plural y género ("apta" en la respuesta, "apto" en la ficha).
+  const forms = (w: string) => { const base = w.replace(/(es|s)$/, ""); return [w, base, `${w}s`, base.replace(/a$/, "o"), base.replace(/o$/, "a")]; };
+  const has = (f: string, w: string) => forms(w).some((x) => f.includes(` ${x} `) || f.includes(` ${x}s `));
+  return texts.some((f) => words.every((w) => has(f, w)) && nums.every((x) => f.includes(` ${x} `)));
 }
+
+/** Palabras de estructura al describir una ficha: no afirman nada por sí solas (los números se controlan aparte). */
+const STRUCTURE_WORDS = new Set(["dormitorio", "dormitorios", "dorm", "ambiente", "ambientes", "amb", "bano", "banos", "terreno", "lote",
+  "superficie", "cubierto", "cubiertos", "cubierta", "cubiertas", "total", "usd", "ars", "precio", "por", "con", "del", "las", "los",
+  "una", "uno", "que", "mas", "info", "link", "aca", "ver", "tiene", "cuenta", "esta", "ubicada", "ubicado", "venta"]);
 
 /** Texto de los VALORES de las fichas y la info del negocio (sin nombres de campos ni mascotas, que es sí/no). */
 function factsValues(properties: PropertyFact[], info: { title: string; body: string }[]): string {
@@ -154,7 +171,8 @@ export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { fil
     zone: f.zone ?? undefined,
     roomsMin: f.rooms_min ?? undefined,
     bedroomsMin: f.bedrooms_min ?? undefined,
-    priceMin: f.price_min ?? undefined,
+    // Un solo número ("60000 dólares") es el tope, no un precio exacto: el modelo a veces lo pone de mínimo y de máximo.
+    priceMin: f.price_min && f.price_min !== f.price_max ? f.price_min : undefined,
     priceMax: f.price_max ?? undefined,
     currency: f.price_max || f.price_min ? (f.currency ?? undefined) : undefined,
     pets: f.pets === true ? true : undefined,
@@ -163,6 +181,9 @@ export function searchPlan(c: Classification, channelOp: "sale" | "rent"): { fil
   };
   const steps: { filters: SearchFilters; note: string | null }[] = [{ filters: base, note: null }];
   if (base.text) steps.push({ filters: { ...base, text: undefined }, note: "Aproximada: no hay con todas las características pedidas (" + base.text + "); se muestran sin esa condición." });
+  if (base.priceMax)
+    steps.push({ filters: { ...base, text: undefined, priceMin: undefined, priceMax: Math.round(base.priceMax * 1.25) },
+      note: "Aproximada: no hay hasta ese presupuesto; se muestran hasta un 25 % por encima (decíselo)." });
   if (base.priceMax || base.priceMin || base.roomsMin || base.bedroomsMin)
     steps.push({ filters: { ...base, text: undefined, priceMin: undefined, priceMax: undefined, currency: undefined, roomsMin: undefined, bedroomsMin: undefined },
       note: "Aproximada: no hay con ese presupuesto/ambientes; se muestran las más cercanas en precio de la misma zona y tipo." });
@@ -264,7 +285,10 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
         searchNote = `Antes de mostrar propiedades hay que conocer mejor al cliente. No muestres fichas ni digas que hay o que no hay: en un solo mensaje corto y natural, preguntale ${gaps.map((g) => QUESTION[g]).join(" y ")}.`;
       } else {
         didSearch = true;
-        for (const step of searchPlan(c, input.channelOperation)) {
+        // Lo que ya se le mostró no se repite ("¿tenés otras opciones?").
+        const exclude = [...new Set([...(input.shownCodes ?? []), ...input.recentlyShown.map((p) => p.codigo)])];
+        for (const step0 of searchPlan(c, input.channelOperation)) {
+          const step = exclude.length ? { ...step0, filters: { ...step0.filters, excludeCodes: exclude } } : step0;
           // Sin tipo de propiedad: se trae una muestra amplia para saber qué tipos hay.
           const rows = await deps.search(step.filters.propertyType ? step.filters : { ...step.filters, limit: 30 });
           if (!rows.length) continue;
@@ -285,7 +309,9 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
             : null].filter(Boolean).join(" ") || null;
           break;
         }
-        if (!properties.length && !askedNow.length) searchNote = "No hay propiedades disponibles con esos criterios ni parecidas.";
+        if (!properties.length && !askedNow.length) searchNote = exclude.length
+          ? "No hay más propiedades distintas de las que ya se le mostraron con esos criterios ni parecidas. Decíselo y preguntale si puede ampliar zona, presupuesto o tipo."
+          : "No hay propiedades disponibles con esos criterios ni parecidas.";
       }
     }
     trace.push({ event: "searched", summary: properties.length
@@ -361,7 +387,7 @@ export async function decide(input: TurnInput, deps: OrchestratorDeps): Promise<
       // Una "dirección" sin número ni palabra de calle es una zona o un barrio: eso se puede decir.
       .filter((x) => x.rule !== "direccion_exacta" || looksLikeAddress(x.quote))
       // "Dato no respaldado" que está tal cual en la ficha: el verificador se equivocó.
-      .filter((x) => x.rule !== "dato_no_respaldado" || !supportedByFacts(x.quote, factsValues(properties, input.businessInfo)))
+      .filter((x) => x.rule !== "dato_no_respaldado" || !supportedByFacts(x.quote, [...properties.map((p) => factsValues([p], [])), factsValues([], input.businessInfo)]))
       // La pregunta de permiso para avisos la eligió el código: preguntar no es prometer.
       .filter((x) => !(followUp === "alerts" && x.rule === "promesa_de_escribir_despues" && /\?\s*$/.test(x.quote)))
       // Una pregunta al cliente no afirma ningún dato.

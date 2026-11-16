@@ -412,3 +412,35 @@ describe("preguntas de seguimiento", () => {
     expect(d.trace.find((t) => t.event === "follow_up")?.details).toEqual({ asked: ["sell"] });
   });
 });
+
+// ───────── Caso real 2026-11-16: "¿tenés otras opciones?" terminó derivado ─────────
+describe("otras opciones (caso real)", () => {
+  const casa = "Casa , Casa en Salsipuedes , Salsipuedes , USD 59.000 , 2 , 1 , 233 , 90 , Escritura inmediata , Patio , Cochera";
+  const otra = "Casa , Casa con pileta en Unquillo , Unquillo , USD 80.000 , 3 , Pileta";
+  it("la ficha descripta con sus datos no es dato no respaldado", () => {
+    expect(supportedByFacts("1) Casa 2 dormitorios, terreno 233 m², escritura inmediata, USD 59.000.", [casa, otra])).toBe(true);
+    expect(supportedByFacts("1) Casa de 2 dormitorios, terreno de 233 m², escritura inmediata, por USD 59.000.", [casa, otra])).toBe(true);
+  });
+  it("lo que no está en esa misma ficha sigue frenando (no se mezclan fichas)", () => {
+    expect(supportedByFacts("Casa de 2 dormitorios con pileta", [casa, otra])).toBe(false);
+    expect(supportedByFacts("acepta mascotas", [casa, otra])).toBe(false);
+  });
+  it("un solo número de presupuesto es el tope; antes de soltarlo, +25 %", () => {
+    const plan = searchPlan(cls({ filters: { ...cls().filters, price_min: 60000, price_max: 60000, currency: "USD" } }), "sale");
+    expect(plan[0].filters).toMatchObject({ priceMax: 60000 });
+    expect(plan[0].filters.priceMin).toBeUndefined();
+    expect(plan.find((s) => s.filters.priceMax === 75000)?.note).toContain("25 %");
+  });
+  it("no vuelve a mostrar lo que ya vio", async () => {
+    const seen: unknown[] = [];
+    const llm = fakeLlm({ clasificacion: [cls({ filters: { ...cls().filters, price_max: 60000, credit: "contado" } })], respuesta: [goodReply], verificacion: [{ violations: [] }] });
+    await decide({ ...input([msg("tenés otras opciones?")]), shownCodes: ["ZHO6902570", "ZHO9312672"] }, { ...deps(llm), search: async (f) => { seen.push(f); return [ROW]; } });
+    expect(seen[0]).toMatchObject({ excludeCodes: ["ZHO6902570", "ZHO9312672"] });
+  });
+});
+describe("verificador: género y número", () => {
+  it("«apta crédito» con la ficha que dice «Apto crédito»", () => {
+    expect(supportedByFacts("Casa 2 dormitorios con patio y cochera, USD 50.000, terreno 300 m², escritura inmediata y apta crédito.",
+      ["Casa , Casa en Salsipuedes , USD 50.000 , 2 , 300 , Patio , Cochera , Condiciones: Escritura inmediata y apto crédito"])).toBe(true);
+  });
+});
