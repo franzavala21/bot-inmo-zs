@@ -278,3 +278,15 @@
 - `META_WABA_ID` por defecto pasa a 2661699917608139 (`transport/meta.ts`, `scripts/create-template.ts`).
 - [ ] Confirmar que siguen llegando mensajes (que el dueño escriba al bot).
 - [ ] Cuando aprueben las plantillas en la 2661: prueba con número inexistente; el error ya no debería ser 132001.
+
+## Seguimientos a quien dejó de responder (2026-11-16)
+- Decisión de los dueños: aprobar de a uno, a las 20 h (texto) y a los 3 días (plantilla, solo a quien aceptó avisos).
+- `packages/core/src/leads/followups.ts` (código, sin modelo):
+  - `followUpStage`: 1º entre 20 y 23,5 h desde el último mensaje del cliente (margen para aprobarlo antes de las 24 h); 2º entre 3 y 7 días, solo con `wants_alerts`. Nunca si el último en hablar es el cliente, si el chat está derivado (needs_attention) o si pidió la baja.
+  - Texto del 1º: retoma lo último que se le mostró ("¿Pudiste ver las casas que te pasé?", con el género bien) o lo que busca. Es editable.
+  - 2º: plantilla `seguimiento_busqueda` ("Hola {{1}}! Soy Francisco, de Zavala Seppey. ¿Seguís buscando {{2}}? Si querés, te paso opciones nuevas." + botón "No me interesa").
+- Son borradores en `outbound_drafts` (`kind` = follow_up_1 / follow_up_2, `anchor_message_id`: uno de cada tipo por silencio) y se aprueban en Avisos. `discard_answered_follow_ups` descarta los pendientes si el cliente vuelve a escribir.
+- `runFollowUps` corre con cada mensaje entrante (webhook, after), al abrir Avisos y Bandeja, y en el cron diario. Filtro barato antes de leer la ficha.
+- Simulación sin escribir (2026-11-16): 1 chat en franja (3 días); no aceptó avisos → no se arma.
+- [ ] Aplicar `0012_follow_ups.sql` ANTES de desplegar.
+- [ ] Crear la plantilla `seguimiento_busqueda` en Meta cuando los dueños aprueben el texto.

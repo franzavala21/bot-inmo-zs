@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import {
   adminClient, channelByPhoneNumberId, drainForConversation, ingestMetaInbound, MetaClient, metaConfigFromEnv,
-  META_SIGNATURE_HEADER, notifyHandoff, OPT_OUT_PAYLOAD, OPT_OUT_REPLY, parseMetaWebhook, runBotTurn, updateLead, verifyMetaSignature,
+  META_SIGNATURE_HEADER, notifyHandoff, OPT_OUT_PAYLOAD, OPT_OUT_REPLY, parseMetaWebhook, runBotTurn, runFollowUps, updateLead, verifyMetaSignature,
 } from "@inmo/core";
 
 // Webhook de la API oficial de WhatsApp (Meta). Público en el middleware: lo protege la firma con el App Secret.
@@ -93,5 +93,10 @@ export async function POST(req: Request) {
       console.log("[lead] conv=%s resultado=%s", t.conv, lead);
     });
   }
+  // Seguimientos: con cada mensaje que entra se revisan los chats en silencio (solo deja borradores para aprobar).
+  if (events.inbound.length) after(async () => {
+    const r = await runFollowUps(adminClient()).catch((e) => { console.error("[seguimiento] %s", (e as Error).message.slice(0, 120)); return null; });
+    if (r && (r.drafted || r.discarded)) console.log("[seguimiento] borradores=%d descartados=%d", r.drafted, r.discarded);
+  });
   return NextResponse.json({ ok: true });
 }

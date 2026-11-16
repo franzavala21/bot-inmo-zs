@@ -1,19 +1,24 @@
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { MetaClient, metaConfigFromEnv, PROPERTY_TEMPLATE, PUBLIC_COLUMNS, renderTemplate, SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateParams, templateReady, type PublicRow } from "@inmo/core";
+import {
+  adminClient, FOLLOW_UP_TEMPLATE, MetaClient, metaConfigFromEnv, PROPERTY_TEMPLATE, PUBLIC_COLUMNS, renderTemplate, runFollowUps,
+  SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateParams, templateReady, type PublicRow,
+} from "@inmo/core";
 import { ownerClient } from "@/lib/supabase/server";
 import { contactLabel, timeAgo } from "@/lib/format";
 import { DraftActions } from "./draft-card";
 
-// Avisos de propiedades nuevas para interesados. Los arma el matcher (código); un dueño los aprueba DE A UNO.
+// Avisos de propiedades nuevas (matcher) y seguimientos a quien dejó de responder. Los arma el código; un dueño los aprueba DE A UNO.
 export const dynamic = "force-dynamic";
 
 type Contact = { name: string | null; display_name: string | null; phone: string; is_test: boolean; proactive_opt_out: boolean };
 
 export default async function Avisos() {
   const sb = await ownerClient();
+  // Busca chats para retomar antes de listar (barato: solo mira los que están en la franja de 20 h o 3 días).
+  await runFollowUps(adminClient()).catch((e) => console.error("[seguimiento] %s", (e as Error).message.slice(0, 120)));
   const { data: drafts } = await sb.from("outbound_drafts")
-    .select("id, body, status, created_at, decided_at, contact_id, conversation_id, property_id, match:property_matches(reasons), contact:contacts(name, display_name, phone, is_test, proactive_opt_out)")
+    .select("id, kind, body, status, created_at, decided_at, contact_id, conversation_id, property_id, match:property_matches(reasons), contact:contacts(name, display_name, phone, is_test, proactive_opt_out)")
     .order("created_at", { ascending: false }).limit(100);
   const rows = drafts ?? [];
   const pending = rows.filter((d) => d.status === "pending");
@@ -31,7 +36,12 @@ export default async function Avisos() {
   const propBy = new Map(((props ?? []) as unknown as PublicRow[]).map((p) => [p.id, p]));
   const now = Date.now();
   const cfg = metaConfigFromEnv();
-  const tpl = await templateReady(cfg ? new MetaClient(cfg) : null, PROPERTY_TEMPLATE.name, PROPERTY_TEMPLATE.language);
+  const client = cfg ? new MetaClient(cfg) : null;
+  const [tpl, tplFollow] = await Promise.all([
+    templateReady(client, PROPERTY_TEMPLATE.name, PROPERTY_TEMPLATE.language),
+    templateReady(client, FOLLOW_UP_TEMPLATE.name, FOLLOW_UP_TEMPLATE.language),
+  ]);
+  const KIND_LABEL: Record<string, string> = { follow_up_1: "Seguimiento: no contestó en 20 h", follow_up_2: "Seguimiento: no contestó en 3 días" };
 
   const items = pending.map((d) => {
     const lead = leadBy.get(d.contact_id);
@@ -39,23 +49,27 @@ export default async function Avisos() {
     const consent = (lead?.wants_alerts as { value?: boolean } | null)?.value === true;
     const prop = d.property_id ? propBy.get(d.property_id) : undefined;
     const contact = d.contact as unknown as Contact;
-    const mode: "text" | "template" | "blocked" = !prop || contact?.proactive_opt_out ? "blocked" : inWindow ? "text" : consent && tpl.ok ? "template" : "blocked";
-    const why = !prop ? "La propiedad ya no está disponible" : contact?.proactive_opt_out ? "Pidió no recibir avisos"
-      : mode === "blocked" && consent ? `Pasaron 24 h y la plantilla está ${TEMPLATE_STATUS_LABEL[tpl.status] ?? tpl.status}: por ahora no se le puede escribir`
+    const isMatch = d.kind === "match";
+    const t = d.kind === "follow_up_2" ? tplFollow : tpl;
+    const mode: "text" | "template" | "blocked" = (isMatch && !prop) || contact?.proactive_opt_out ? "blocked"
+      : inWindow ? "text" : d.kind === "follow_up_1" ? "blocked" : consent && t.ok ? "template" : "blocked";
+    const why = isMatch && !prop ? "La propiedad ya no está disponible" : contact?.proactive_opt_out ? "Pidió no recibir avisos"
+      : mode === "blocked" && d.kind === "follow_up_1" ? "Pasaron las 24 h: ya no sale como texto. Descartalo (a los 3 días aparece el de plantilla, si aceptó avisos)"
+      : mode === "blocked" && consent ? `Pasaron 24 h y la plantilla está ${TEMPLATE_STATUS_LABEL[t.status] ?? t.status}: por ahora no se le puede escribir`
       : mode === "blocked" ? "Pasaron 24 h y no aceptó recibir avisos: no se le puede escribir" : null;
-    return { d, prop, contact, mode, why, score: scoreBy.get(d.contact_id) ?? 0,
-      body: mode === "template" && prop ? renderTemplate(templateParams(prop)) : d.body,
+    return { d, prop, contact, mode, why, score: scoreBy.get(d.contact_id) ?? 0, label: KIND_LABEL[d.kind] ?? null,
+      body: mode === "template" && isMatch && prop ? renderTemplate(templateParams(prop)) : d.body,
       reasons: ((d.match as unknown as { reasons: string[] } | null)?.reasons ?? []) };
   }).sort((a, b) => b.score - a.score);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader title="Avisos" description={<>Cuando entra una propiedad que coincide con lo que alguien busca, queda acá un aviso. Nada sale sin que lo apruebes, de a uno.
+      <PageHeader title="Avisos" description={<>Propiedades nuevas para quien las buscaba y seguimientos a quien dejó de responder (a las 20 h y a los 3 días). Nada sale sin que lo apruebes, de a uno.
           Dentro de las 24 h de su último mensaje sale como texto (lo podés editar); después, como la plantilla «{PROPERTY_TEMPLATE.name}» de Meta,
           solo a quien aceptó recibir avisos.</>} />
 
       <ol className="space-y-3">
-        {items.map(({ d, prop, contact, mode, why, score, body, reasons }) => (
+        {items.map(({ d, prop, contact, mode, why, score, body, reasons, label }) => (
           <li key={d.id} className="space-y-2 rounded-xl border border-zinc-200 bg-white shadow-sm p-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div className="font-medium">
@@ -66,7 +80,7 @@ export default async function Avisos() {
               <Link href={`/bandeja/${d.conversation_id}`} className="text-sm text-blue-700 underline">Chat</Link>
             </div>
             <div className="text-sm text-zinc-600">
-              {prop ? `${prop.reference_code} · ${prop.property_type} en ${prop.zone}` : "Propiedad no disponible"} · {timeAgo(d.created_at)}
+              {label ? <span className="font-medium text-amber-800">{label}</span> : prop ? `${prop.reference_code} · ${prop.property_type} en ${prop.zone}` : "Propiedad no disponible"} · {timeAgo(d.created_at)}
             </div>
             <ul className="flex flex-wrap gap-1 text-xs">
               {reasons.map((r) => <li key={r} className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800">{r}</li>)}

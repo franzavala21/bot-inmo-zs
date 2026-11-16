@@ -1,5 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
+import { after } from "next/server";
+import { adminClient, runFollowUps } from "@inmo/core";
 import { ownerClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { contactLabel, KIND_LABEL, timeAgo } from "@/lib/format";
@@ -14,6 +16,8 @@ type Row = {
 export default async function Bandeja({ searchParams }: { searchParams: Promise<{ f?: string }> }) {
   const { f = "" } = await searchParams;
   const sb = await ownerClient();
+  // Seguimientos en segundo plano (no frena la bandeja).
+  after(() => runFollowUps(adminClient()).catch(() => null));
   let q = sb.from("conversations")
     .select("id, mode, needs_attention, attention_reason, last_message_at, contact:contacts(phone, name, display_name, is_test), messages(author, kind, body, created_at)")
     .order("last_message_at", { ascending: false })
