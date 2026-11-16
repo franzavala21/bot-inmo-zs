@@ -288,5 +288,5 @@
 - Son borradores en `outbound_drafts` (`kind` = follow_up_1 / follow_up_2, `anchor_message_id`: uno de cada tipo por silencio) y se aprueban en Avisos. `discard_answered_follow_ups` descarta los pendientes si el cliente vuelve a escribir.
 - `runFollowUps` corre con cada mensaje entrante (webhook, after), al abrir Avisos y Bandeja, y en el cron diario. Filtro barato antes de leer la ficha.
 - Simulación sin escribir (2026-11-16): 1 chat en franja (3 días); no aceptó avisos → no se arma.
-- [ ] Aplicar `0012_follow_ups.sql` ANTES de desplegar.
+- [x] `0012_follow_ups.sql` aplicada.
 - [ ] Crear la plantilla `seguimiento_busqueda` en Meta cuando los dueños aprueben el texto.
