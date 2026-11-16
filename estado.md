@@ -257,3 +257,14 @@
   - Si después la sincronización de Tokko trae el mismo contacto (por teléfono o email), le pone el id a esa consulta en vez de crear otra.
 - Migración `0011` (`tokko_contact_id` admite null, columna `source`).
 - [x] `0011` aplicada y avisos ya recibidos procesados (2026-11-15).
+
+## Error 132001 con plantillas aprobadas y "Abrir en WhatsApp" (2026-11-16)
+- Diagnóstico (con un número inexistente, 5490000000001, para no escribirle a nadie):
+  - las dos plantillas figuran APPROVED, `es_AR`, en la WABA 1859520905073768;
+  - el número 1426968407167616 está en esa WABA (CONNECTED, GREEN, LIVE, CLOUD_API);
+  - el token es SYSTEM_USER, no vence y tiene permisos de WhatsApp sin restricción de cuentas;
+  - con v21, v23 y v26, con o sin componentes: `132001 template name (…) does not exist in es_AR` para AMBAS; el texto libre funciona.
+  - Hipótesis (sin confirmar): el número no ve las plantillas de su WABA del lado de Meta.
+- [ ] El dueño revisa en WhatsApp Manager el método de pago y que las plantillas estén en la cuenta del número; si está todo bien, caso a soporte de Meta.
+- Plantilla nueva `consulta_portal_propiedad` (id 1699951634825708, PENDING): "Hola {{1}}! Soy Francisco, de Zavala Seppey. Vimos tu consulta en {{2}} por {{3}}: {{4}}…", con propiedad y link. Se usa cuando el email de Tokko dice qué propiedad consultó; si no, `consulta_portal`. El artículo lo arma `propertyPhrase` ("la casa", "el terreno").
+- "Abrir en WhatsApp" (`wa.me` con el mensaje y el link escritos) en cada consulta con teléfono válido que no pidió la baja: lo manda el dueño desde su WhatsApp (no queda en el panel ni lo sigue el bot). "Marcar como contactada" deja la consulta en Contactadas, con línea en la bitácora (`portal_contacted_manual`).

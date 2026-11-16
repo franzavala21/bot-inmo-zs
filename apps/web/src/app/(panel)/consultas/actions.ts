@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import {
   adminClient, drainForConversation, MetaClient, metaConfigFromEnv, PORTAL_TEMPLATE, portalTemplateParams,
   renderPortalTemplate, seedLeadFromPortal, syncPortalLeads, TEMPLATE_STATUS_LABEL, templateReady,
+  PORTAL_PROPERTY_TEMPLATE, PUBLIC_COLUMNS, portalPropertyParams, renderPortalPropertyTemplate, type PublicRow,
 } from "@inmo/core";
 
 import { requireOwner } from "@/lib/supabase/server";
@@ -46,21 +47,28 @@ export async function contactPortalLead(leadId: string): Promise<{ ok: boolean; 
   if (!l.phone) return { ok: false, error: "No tiene un teléfono válido" };
   if (l.operation === "rent") return { ok: false, error: "Es de alquiler: la atiende otra persona" };
 
-  // Meta rechaza una plantilla que todavía está en revisión (error 132001): no se encola.
-  const cfg = metaConfigFromEnv();
-  const ready = await templateReady(cfg ? new MetaClient(cfg) : null, PORTAL_TEMPLATE.name, PORTAL_TEMPLATE.language);
-  if (!ready.ok) return { ok: false, error: `La plantilla está ${TEMPLATE_STATUS_LABEL[ready.status] ?? ready.status}: todavía no se puede enviar` };
-
-  // Si llegó el email de Tokko, se sabe la propiedad: la zona sale de ahí y el bot queda sabiendo de qué ficha hablan.
+  // Si llegó el email de Tokko, se sabe la propiedad: va en el mensaje (con link) y el bot queda sabiendo de qué ficha hablan.
   const inq = await inquiryFor(db, l.phone, l.email);
   const codes = (inq?.property_codes ?? []) as string[];
-  const { data: prop } = codes.length
-    ? await db.from("properties_public").select("reference_code, zone").in("reference_code", codes).limit(1).maybeSingle()
+  const { data: propRow } = codes.length
+    ? await db.from("properties_public").select(PUBLIC_COLUMNS).in("reference_code", codes).limit(1).maybeSingle()
     : { data: null };
-  const params = portalTemplateParams({ name: l.name, origin: l.origin, zones: prop?.zone ? [prop.zone] : l.zones ?? [] });
-  const template = { name: PORTAL_TEMPLATE.name, language: PORTAL_TEMPLATE.language, params, buttons: PORTAL_TEMPLATE.buttons.map((b) => b.payload) };
+  const prop = propRow as unknown as PublicRow | null;
+  const link = prop ? prop.web_url || prop.public_url : null;
+  const T = prop && link ? PORTAL_PROPERTY_TEMPLATE : PORTAL_TEMPLATE;
+
+  // Meta rechaza una plantilla que no está habilitada (error 132001): no se encola.
+  const cfg = metaConfigFromEnv();
+  const ready = await templateReady(cfg ? new MetaClient(cfg) : null, T.name, T.language);
+  if (!ready.ok) return { ok: false, error: `La plantilla está ${TEMPLATE_STATUS_LABEL[ready.status] ?? ready.status}: todavía no se puede enviar. Usá "Abrir en WhatsApp".` };
+
+  const params = prop && link
+    ? portalPropertyParams({ name: l.name, origin: l.origin }, prop, link)
+    : portalTemplateParams({ name: l.name, origin: l.origin, zones: prop?.zone ? [prop.zone] : l.zones ?? [] });
+  const body = prop && link ? renderPortalPropertyTemplate(params) : renderPortalTemplate(params);
+  const template = { name: T.name, language: T.language, params, buttons: T.buttons.map((b) => b.payload) };
   const { data, error } = await db.rpc("contact_portal_lead", {
-    p_lead_id: leadId, p_user: user.id, p_channel_slug: CHANNEL, p_body: renderPortalTemplate(params), p_template: template,
+    p_lead_id: leadId, p_user: user.id, p_channel_slug: CHANNEL, p_body: body, p_template: template,
     p_property_codes: prop ? [prop.reference_code] : [],
   });
   if (error) {
@@ -78,6 +86,21 @@ export async function contactPortalLead(leadId: string): Promise<{ ok: boolean; 
   const r = await drainForConversation(db, cfg ? new MetaClient(cfg) : null, conversationId).catch(() => null);
   revalidatePath("/consultas");
   return { ok: true, conversationId, sent: !!r && r.sent > 0 };
+}
+
+/** Le escribió un dueño desde su propio WhatsApp ("Abrir en WhatsApp"): la consulta pasa a contactadas y queda anotado. */
+export async function markPortalContacted(leadId: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireOwner();
+  if (!user) return { ok: false, error: "No autorizado" };
+  const db = adminClient();
+  const { data, error } = await db.from("portal_leads").update({ status: "contacted", decided_by: user.id, decided_at: new Date().toISOString() })
+    .eq("id", leadId).eq("status", "new").select("origin, conversation_id").maybeSingle();
+  if (error) return { ok: false, error: "No se pudo marcar" };
+  if (!data) return { ok: false, error: "Esta consulta ya no está pendiente" };
+  await db.from("audit_log").insert({ conversation_id: data.conversation_id, event: "portal_contacted_manual",
+    summary: `Un dueño le escribió desde su WhatsApp por una consulta de ${data.origin ?? "un portal"}`, details: { portal_lead_id: leadId, by: user.id } });
+  revalidatePath("/consultas");
+  return { ok: true };
 }
 
 export async function dismissPortalLead(leadId: string): Promise<{ ok: boolean; error?: string }> {

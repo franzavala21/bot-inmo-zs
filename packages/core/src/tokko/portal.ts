@@ -154,3 +154,35 @@ export async function leadsFromInquiries(db: SupabaseClient, inqs: InquiryRow[])
   }
   return created;
 }
+
+// ───────── Con la propiedad consultada (del email de Tokko): plantilla con el link ─────────
+export const PORTAL_PROPERTY_TEMPLATE = {
+  name: process.env.META_TEMPLATE_PORTAL_PROP ?? "consulta_portal_propiedad",
+  language: process.env.META_TEMPLATE_LANG ?? "es_AR",
+  category: "MARKETING" as const,
+  body: "Hola {{1}}! Soy Francisco, de Zavala Seppey. Vimos tu consulta en {{2}} por {{3}}: {{4}}\n\n¿Seguís interesado? Contame y te ayudo.",
+  example: ["Ana", "Zonaprop", "la casa de 3 dormitorios en Salsipuedes, USD 95.000", "https://inmobiliariazavalaseppey.com.ar/propiedad/casa-3-dormitorios-en-venta-salsipuedes-7276514/"],
+  buttons: [{ text: "No me interesa", payload: "OPT_OUT" }],
+};
+
+const ARTICLE: [RegExp, string][] = [[/^(casa|caba[nñ]a|oficina|quinta|cochera)/i, "la"], [/^(terreno|lote|departamento|depto|ph|local|galp|campo|d[uú]plex|chalet)/i, "el"]];
+/** "la casa de 3 dormitorios en Salsipuedes, USD 95.000" (con artículo según el tipo). */
+export function propertyPhrase(p: { property_type: string | null; bedrooms: number | null; zone: string | null; price: number | null; currency: string | null }): string {
+  const tipo = (p.property_type ?? "propiedad").toLowerCase();
+  const art = ARTICLE.find(([re]) => re.test(tipo))?.[1] ?? "la";
+  const dorm = p.bedrooms && p.bedrooms > 0 ? ` de ${p.bedrooms} dormitorio${p.bedrooms === 1 ? "" : "s"}` : "";
+  const price = p.price && p.price > 0 ? `, ${p.currency ?? ""} ${new Intl.NumberFormat("es-AR").format(p.price)}`.replace(/ +/g, " ") : "";
+  return `${art} ${tipo === "ph" ? "PH" : tipo}${dorm}${p.zone ? ` en ${p.zone}` : ""}${price}`;
+}
+export function portalPropertyParams(l: { name: string | null; origin: string | null }, p: Parameters<typeof propertyPhrase>[0], link: string): string[] {
+  const [name, origin] = portalTemplateParams({ name: l.name, origin: l.origin, zones: [] });
+  return [name, origin, propertyPhrase(p), link];
+}
+export function renderPortalPropertyTemplate(params: string[]): string {
+  return PORTAL_PROPERTY_TEMPLATE.body.replace(/\{\{(\d+)\}\}/g, (_, i) => params[Number(i) - 1] ?? "");
+}
+
+/** Link para abrir el chat en el WhatsApp del dueño con el mensaje ya escrito (lo manda él, desde su teléfono). */
+export function waMeLink(phone: string, text: string): string {
+  return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
+}

@@ -72,3 +72,20 @@ describe("consulta nueva desde el email", () => {
   it("el aviso es anterior a cuando la atendieron: no se crea", () =>
     expect(inquiryCreatesLead("2026-11-09T10:00:00Z", [{ status: "dismissed", decided_at: "2026-11-10T00:00:00Z" }])).toBe(false));
 });
+
+import { portalPropertyParams, propertyPhrase, renderPortalPropertyTemplate, waMeLink } from "../tokko/portal";
+describe("mensaje con la propiedad consultada", () => {
+  const casa = { property_type: "Casa", bedrooms: 3, zone: "Salsipuedes", price: 95000, currency: "USD" };
+  it("artículo según el tipo", () => {
+    expect(propertyPhrase(casa)).toBe("la casa de 3 dormitorios en Salsipuedes, USD 95.000");
+    expect(propertyPhrase({ property_type: "Terreno", bedrooms: 0, zone: "Río Ceballos", price: 22500, currency: "USD" })).toBe("el terreno en Río Ceballos, USD 22.500");
+    expect(propertyPhrase({ property_type: "PH", bedrooms: 2, zone: null, price: null, currency: null })).toBe("el PH de 2 dormitorios");
+  });
+  it("texto completo con link", () => {
+    const t = renderPortalPropertyTemplate(portalPropertyParams({ name: "Ana Pérez", origin: "Zonaprop" }, casa, "https://x.com/p/1/"));
+    expect(t).toBe("Hola Ana! Soy Francisco, de Zavala Seppey. Vimos tu consulta en Zonaprop por la casa de 3 dormitorios en Salsipuedes, USD 95.000: https://x.com/p/1/\n\n¿Seguís interesado? Contame y te ayudo.");
+  });
+  it("link de WhatsApp con el texto codificado", () => {
+    expect(waMeLink("+54 9 351 123-4567", "Hola! ¿Seguís?")).toBe("https://wa.me/5493511234567?text=Hola!%20%C2%BFSegu%C3%ADs%3F");
+  });
+});

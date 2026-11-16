@@ -1,6 +1,9 @@
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { MetaClient, metaConfigFromEnv, PORTAL_TEMPLATE, portalTemplateParams, renderPortalTemplate, SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateReady } from "@inmo/core";
+import {
+  MetaClient, metaConfigFromEnv, PORTAL_PROPERTY_TEMPLATE, PORTAL_TEMPLATE, portalPropertyParams, portalTemplateParams, PUBLIC_COLUMNS,
+  renderPortalPropertyTemplate, renderPortalTemplate, SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateReady, waMeLink, type PublicRow,
+} from "@inmo/core";
 import { ownerClient } from "@/lib/supabase/server";
 import { phonePretty, timeAgo } from "@/lib/format";
 import { AutoSync, LeadActions, RefreshButton } from "./lead-actions";
@@ -45,12 +48,16 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
     inquiries.find((q) => (phone && q.phone === phone) || (email && q.email === email.toLowerCase()));
   const codes = [...new Set(inquiries.flatMap((q) => q.property_codes))];
   const { data: props } = codes.length
-    ? await sb.from("properties_public").select("reference_code, zone, price, currency, web_url, public_url").in("reference_code", codes)
+    ? await sb.from("properties_public").select(PUBLIC_COLUMNS).in("reference_code", codes)
     : { data: [] };
-  const propBy = new Map((props ?? []).map((p) => [p.reference_code as string, p]));
+  const propBy = new Map(((props ?? []) as unknown as PublicRow[]).map((p) => [p.reference_code as string, p]));
 
   const cfg = metaConfigFromEnv();
-  const tpl = await templateReady(cfg ? new MetaClient(cfg) : null, PORTAL_TEMPLATE.name, PORTAL_TEMPLATE.language);
+  const client = cfg ? new MetaClient(cfg) : null;
+  const [tpl, tplProp] = await Promise.all([
+    templateReady(client, PORTAL_TEMPLATE.name, PORTAL_TEMPLATE.language),
+    templateReady(client, PORTAL_PROPERTY_TEMPLATE.name, PORTAL_PROPERTY_TEMPLATE.language),
+  ]);
 
   const lastClient = new Map<string, string>();
   for (const m of lastMsgs ?? []) if (!lastClient.has(m.conversation_id)) lastClient.set(m.conversation_id, m.created_at);
@@ -61,9 +68,11 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
         description={<>Lo que entra a Tokko (Zonaprop, Mercadolibre, web). Escribirle manda la plantilla «{PORTAL_TEMPLATE.name}» desde el número del bot;
           si responde, el bot sigue la charla y lo califica.</>} />
       {stale && <AutoSync />}
-      {!tpl.ok && (
+      {!tpl.ok && !tplProp.ok && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          La plantilla «{PORTAL_TEMPLATE.name}» está {TEMPLATE_STATUS_LABEL[tpl.status] ?? tpl.status}. Hasta que Meta la apruebe no se puede escribir a estas consultas.
+          Las plantillas de Meta todavía no se pueden usar («{PORTAL_TEMPLATE.name}»: {TEMPLATE_STATUS_LABEL[tpl.status] ?? tpl.status};
+          «{PORTAL_PROPERTY_TEMPLATE.name}»: {TEMPLATE_STATUS_LABEL[tplProp.status] ?? tplProp.status}). Mientras tanto, usá «Abrir en WhatsApp»:
+          te abre tu WhatsApp con el mensaje y el link ya escritos.
         </p>
       )}
 
@@ -81,15 +90,21 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
           const lc = l.conversation_id ? lastClient.get(l.conversation_id) : undefined;
           const openChat = !!lc && Date.now() - new Date(lc).getTime() < SERVICE_WINDOW_MS;
           const opt = (l.contact as unknown as { proactive_opt_out: boolean } | null)?.proactive_opt_out;
+          const inq = inquiryOf(l.phone, l.email);
+          const prop = inq?.property_codes.map((c) => propBy.get(c)).find(Boolean);
+          const zonesShown = prop?.zone ? [prop.zone] : zones;
+          const link = prop ? prop.web_url || prop.public_url : null;
+          const withProp = !!(prop && link);
+          const message = withProp
+            ? renderPortalPropertyTemplate(portalPropertyParams({ name: l.name, origin: l.origin }, prop!, link!))
+            : renderPortalTemplate(portalTemplateParams({ name: l.name, origin: l.origin, zones: zonesShown }));
+          const ready = withProp ? tplProp : tpl;
           const blocked = l.operation === "rent" ? "Alquiler: lo atiende otra persona"
             : !l.phone ? "Sin teléfono válido para WhatsApp"
             : opt ? "Pidió no recibir mensajes"
             : openChat ? "Ya escribió al bot hace menos de 24 h: respondele desde el chat"
-            : !tpl.ok ? `Plantilla ${TEMPLATE_STATUS_LABEL[tpl.status] ?? tpl.status}`
+            : !ready.ok ? `Plantilla ${TEMPLATE_STATUS_LABEL[ready.status] ?? ready.status}`
             : null;
-          const inq = inquiryOf(l.phone, l.email);
-          const prop = inq?.property_codes.map((c) => propBy.get(c)).find(Boolean);
-          const zonesShown = prop?.zone ? [prop.zone] : zones;
           const what = [l.operation === "rent" ? "Alquiler" : l.operation === "sale" ? "Compra" : null, l.property_type, zones.join(", ")].filter(Boolean).join(" · ");
           return (
             <li key={l.id} className="space-y-2 rounded-xl border border-zinc-200 bg-white shadow-sm p-3">
@@ -118,8 +133,8 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
                 {l.conversation_id && <> · <Link href={`/bandeja/${l.conversation_id}`} className="text-blue-700 underline">Ver chat</Link></>}
               </div>
               {tab === "new" && (
-                <LeadActions leadId={l.id} blocked={blocked}
-                  preview={renderPortalTemplate(portalTemplateParams({ name: l.name, origin: l.origin, zones: zonesShown }))} />
+                <LeadActions leadId={l.id} blocked={blocked} preview={message}
+                  waLink={l.phone && !opt ? waMeLink(l.phone, message) : null} />
               )}
               {tab !== "new" && l.decided_at && <div className="text-xs text-zinc-500">{TABS[tab]} {timeAgo(l.decided_at)}</div>}
             </li>
