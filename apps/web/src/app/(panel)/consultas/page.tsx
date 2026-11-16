@@ -7,16 +7,18 @@ import {
 import { ownerClient } from "@/lib/supabase/server";
 import { phonePretty, timeAgo } from "@/lib/format";
 import { AutoSync, LeadActions, RefreshButton } from "./lead-actions";
+import { Avatar, Pill } from "@/components/ui";
 
 // Consultas que entran a Tokko desde los portales. Se escriben de a una, con aprobación (plantilla de Meta).
 export const dynamic = "force-dynamic";
 const STALE_MS = 5 * 60_000;
 
 const TABS = { new: "Nuevas", contacted: "Contactadas", dismissed: "Descartadas" } as const;
-const ORIGIN_CLS: Record<string, string> = { Zonaprop: "bg-orange-50 text-orange-800", Mercadolibre: "bg-yellow-50 text-yellow-800" };
 
-export default async function Consultas({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
-  const { ver } = await searchParams;
+export default async function Consultas({ searchParams }: { searchParams: Promise<{ ver?: string; op?: string }> }) {
+  const { ver, op: rawOp } = await searchParams;
+  // Por defecto, venta (el canal del bot); los alquileres los atiende otra persona.
+  const op = rawOp === "rent" || rawOp === "all" ? rawOp : "sale";
   const tab = (ver && ver in TABS ? ver : "new") as keyof typeof TABS;
   const sb = await ownerClient();
 
@@ -24,20 +26,22 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
   const { data: last } = await sb.from("portal_leads").select("synced_at").order("synced_at", { ascending: false }).limit(1).maybeSingle();
   const stale = !last || Date.now() - new Date(last.synced_at).getTime() > STALE_MS;
 
-  const { data: leads } = await sb.from("portal_leads")
+  const { data: leadsAll } = await sb.from("portal_leads")
     .select("id, source, name, phone, phone_raw, email, origin, operation, property_type, zones, tokko_status, tokko_created_at, status, conversation_id, decided_at, contact:contacts(proactive_opt_out)")
     .eq("status", tab).order("tokko_created_at", { ascending: false }).limit(150);
-  const { data: counts } = await sb.from("portal_leads").select("status");
-  const count = (s: string) => (counts ?? []).filter((c) => c.status === s).length;
+  const leads = (leadsAll ?? []).filter((l) => op === "all" || l.operation === op || (op === "sale" && !l.operation));
+  const { data: counts } = await sb.from("portal_leads").select("status, operation");
+  const inOp = (c: { operation: string | null }) => op === "all" || c.operation === op || (op === "sale" && !c.operation);
+  const count = (s: string) => (counts ?? []).filter((c) => c.status === s && inOp(c)).length;
 
   // ¿Ya escribió al bot? Último mensaje del cliente en ese chat (para no mandarle plantilla si la charla está abierta).
-  const convIds = (leads ?? []).map((l) => l.conversation_id).filter(Boolean) as string[];
+  const convIds = leads.map((l) => l.conversation_id).filter(Boolean) as string[];
   const { data: lastMsgs } = convIds.length
     ? await sb.from("messages").select("conversation_id, created_at").in("conversation_id", convIds).eq("author", "client").order("created_at", { ascending: false })
     : { data: [] };
   // Propiedad consultada (de los emails "Nueva consulta" de Tokko), por teléfono o email.
-  const phones = (leads ?? []).map((l) => l.phone).filter(Boolean) as string[];
-  const emails = (leads ?? []).map((l) => l.email?.toLowerCase()).filter(Boolean) as string[];
+  const phones = leads.map((l) => l.phone).filter(Boolean) as string[];
+  const emails = leads.map((l) => l.email?.toLowerCase()).filter(Boolean) as string[];
   const [{ data: inqP }, { data: inqE }] = await Promise.all([
     phones.length ? sb.from("portal_inquiries").select("phone, email, property_codes, property_title, message, received_at").in("phone", phones) : Promise.resolve({ data: [] }),
     emails.length ? sb.from("portal_inquiries").select("phone, email, property_codes, property_title, message, received_at").in("email", emails) : Promise.resolve({ data: [] }),
@@ -76,16 +80,23 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
         </p>
       )}
 
-      <nav className="flex gap-1 text-sm">
-        {(Object.keys(TABS) as (keyof typeof TABS)[]).map((k) => (
-          <Link key={k} href={`/consultas?ver=${k}`} className={`rounded-full border px-3 py-1 ${tab === k ? "border-emerald-700 bg-emerald-700 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"}`}>
-            {TABS[k]} ({count(k)})
-          </Link>
-        ))}
-      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <nav className="flex flex-wrap gap-2 text-sm">
+          {(Object.keys(TABS) as (keyof typeof TABS)[]).map((k) => (
+            <Link key={k} href={`/consultas?ver=${k}&op=${op}`} className={`rounded-full border px-3 py-1 ${tab === k ? "border-emerald-700 bg-emerald-700 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"}`}>
+              {TABS[k]} ({count(k)})
+            </Link>
+          ))}
+        </nav>
+        <nav className="flex rounded-full border border-zinc-300 bg-white p-0.5 text-sm">
+          {([["sale", "Venta"], ["rent", "Alquiler"], ["all", "Todas"]] as const).map(([v, l]) => (
+            <Link key={v} href={`/consultas?ver=${tab}&op=${v}`} className={`rounded-full px-3 py-0.5 ${op === v ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}>{l}</Link>
+          ))}
+        </nav>
+      </div>
 
       <ol className="space-y-3">
-        {(leads ?? []).map((l) => {
+        {leads.map((l) => {
           const zones = (l.zones ?? []) as string[];
           const lc = l.conversation_id ? lastClient.get(l.conversation_id) : undefined;
           const openChat = !!lc && Date.now() - new Date(lc).getTime() < SERVICE_WINDOW_MS;
@@ -107,11 +118,17 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
             : null;
           const what = [l.operation === "rent" ? "Alquiler" : l.operation === "sale" ? "Compra" : null, l.property_type, zones.join(", ")].filter(Boolean).join(" · ");
           return (
-            <li key={l.id} className="space-y-2 rounded-xl border border-zinc-200 bg-white shadow-sm p-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <div className="font-medium">
-                  {l.name ?? "Sin nombre"}
-                  {l.origin && <span className={`ml-2 rounded px-1.5 py-0.5 text-xs ${ORIGIN_CLS[l.origin] ?? "bg-zinc-100 text-zinc-600"}`}>{l.origin}</span>}
+            <li key={l.id} className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={l.name ?? "?"} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 font-medium">
+                      {l.name ?? "Sin nombre"}
+                      {l.origin && <Pill tone={l.origin === "Zonaprop" ? "amber" : l.origin === "Mercadolibre" ? "blue" : "zinc"}>{l.origin}</Pill>}
+                      {l.operation === "rent" && <Pill tone="violet">Alquiler</Pill>}
+                    </div>
+                  </div>
                 </div>
                 <span className="text-xs text-zinc-500">{timeAgo(l.tokko_created_at)} · {l.source === "email" && !l.tokko_status ? "Aviso por email de Tokko" : `Tokko: ${l.tokko_status ?? "—"}`}</span>
               </div>
@@ -134,13 +151,13 @@ export default async function Consultas({ searchParams }: { searchParams: Promis
               </div>
               {tab === "new" && (
                 <LeadActions leadId={l.id} blocked={blocked} preview={message}
-                  waLink={l.phone && !opt ? waMeLink(l.phone, message) : null} />
+                  waLink={l.phone && !opt && l.operation !== "rent" ? waMeLink(l.phone, message) : null} />
               )}
               {tab !== "new" && l.decided_at && <div className="text-xs text-zinc-500">{TABS[tab]} {timeAgo(l.decided_at)}</div>}
             </li>
           );
         })}
-        {(leads ?? []).length === 0 && <li className="text-sm text-zinc-500">No hay consultas {TABS[tab].toLowerCase()}.</li>}
+        {leads.length === 0 && <li className="text-sm text-zinc-500">No hay consultas {TABS[tab].toLowerCase()}.</li>}
       </ol>
     </div>
   );

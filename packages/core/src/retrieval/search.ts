@@ -41,7 +41,7 @@ export function parseRooms(s: string): number | undefined {
 }
 
 export const PUBLIC_COLUMNS =
-  "id, tokko_id, reference_code, operation, property_type, title, description, price, currency, expenses, zone, rooms, bedrooms, bathrooms, surface_total, surface_covered, pets_allowed, amenities, public_url, web_url";
+  "id, tokko_id, reference_code, operation, property_type, title, description, price, currency, expenses, zone, rooms, bedrooms, bathrooms, surface_total, surface_covered, pets_allowed, amenities, public_url, web_url, photo_url";
 
 export async function searchProperties(db: SupabaseClient, f: SearchFilters) {
   // Solo la vista publicable. Nunca la tabla `properties`.

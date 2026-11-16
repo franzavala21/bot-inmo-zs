@@ -45,6 +45,7 @@ async function Footer() {
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   const groups: NavGroup[] = [
+    { title: "General", items: [{ href: "/inicio", label: "Inicio", icon: "dashboard" }] },
     { title: "Clientes", items: [
       { href: "/bandeja", label: "Bandeja", icon: "inbox", badge: badge({ table: "conversations", filter: ["needs_attention", true], tone: "red" }) },
       { href: "/leads", label: "A quién llamar", icon: "phone" },

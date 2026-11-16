@@ -290,3 +290,15 @@
 - Simulación sin escribir (2026-11-16): 1 chat en franja (3 días); no aceptó avisos → no se arma.
 - [x] `0012_follow_ups.sql` aplicada.
 - [x] Plantilla `seguimiento_busqueda` creada en la WABA 2661 (2026-11-16, PENDING).
+
+## Segunda mejora del panel (2026-11-16)
+- **Inicio** (`/inicio`, la entrada al panel):
+  - Arriba, los números del día: necesitan atención, sin responder (el cliente escribió último hace más de 10 min y no está derivado), consultas nuevas, avisos por aprobar (cuántos son seguimientos) y visitas de hoy.
+  - Debajo, listas con link: chats derivados, consultas nuevas, a quién llamar y visitas de hoy.
+- **Bandeja:** buscador por nombre o teléfono, filtro "Sin responder", avatar con iniciales, punto rojo o ámbar y etiquetas (Sin responder / Bot / Humano).
+- **Chat:** burbujas tipo WhatsApp con separador por día; en pantalla grande la ficha y la bitácora van al costado (en celular, plegables). Abre en el último mensaje (`ScrollToBottom`). El botón de modo dice solo la acción ("Tomar el chat" / "Devolver al bot").
+- **Propiedades:** tarjetas con foto de Tokko (las 78 tienen), precio grande, datos en etiquetas, hasta 120 resultados. `photo_url` se suma a `PUBLIC_COLUMNS` (ya estaba en la vista pública).
+- **Consultas:** filtro Venta / Alquiler / Todas (venta por defecto), avatar y etiquetas. "Abrir en WhatsApp" no aparece en alquileres.
+- **Arreglo:** el servidor corre en UTC y las horas del panel se formateaban con esa zona. Ahora todo usa America/Argentina/Cordoba y formato de 24 h (`lib/format.ts`).
+- Verificado con capturas locales (Chrome headless con una sesión de dueño generada por admin, sin email) en escritorio y celular. Las capturas detectaron un import faltante que el compilador no marcó.
+- Componentes comunes: `components/ui.tsx` (Avatar, Pill, StatCard, Panel, EmptyState).

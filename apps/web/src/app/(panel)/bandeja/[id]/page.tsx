@@ -4,7 +4,9 @@ import { adminClient, computeSignals, profileFromRow, publishedScoringRules, sco
 import { LeadCard } from "@/components/lead-card";
 import { ownerClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { contactLabel, KIND_LABEL, phonePretty, timeShort } from "@/lib/format";
+import { contactLabel, KIND_LABEL, longDay, phonePretty, timeOfDay, timeShort } from "@/lib/format";
+import { ScrollToBottom } from "@/components/scroll-to-bottom";
+import { Avatar, Pill } from "@/components/ui";
 import { Composer } from "./composer";
 import { ModeToggle } from "./mode-toggle";
 import { RetryButton } from "./retry-button";
@@ -74,73 +76,113 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
   }
   const contact = conv.contact as unknown as { phone: string; name: string | null; display_name: string | null; is_test: boolean } | null;
 
+  const name = contact ? contactLabel(contact) : "?";
+  const day = longDay;
+  const ficha = (
+    <LeadCard contactId={conv.contact_id} conversationId={conv.id} profile={lead.profile} conflicts={lead.conflicts} score={leadScore.score} breakdown={leadScore.breakdown} />
+  );
+  const bitacora = (
+    <ol className="space-y-1.5 text-xs">
+      {(audit ?? []).map((a) => (
+        <li key={a.id} className="flex gap-2">
+          <span className="w-[4.5rem] shrink-0 whitespace-nowrap tabular-nums text-zinc-400">{timeShort(a.created_at)}</span>
+          <span className="min-w-0">
+            <span className={EVENT_CLS[a.event] ?? "text-zinc-700"}>{a.summary}</span>
+            {auditDetail(a.event, a.details) && <span className="text-zinc-400"> · {auditDetail(a.event, a.details)}</span>}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+
   return (
-    <div className="mx-auto flex h-[calc(100dvh-6.5rem)] max-w-3xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 shadow-sm md:h-[calc(100dvh-4rem)]">
+    <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
       <RealtimeRefresh tables={["messages", "conversations", "outbound_messages"]} />
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white p-3">
-        <div className="min-w-0">
-          <Link href="/bandeja" className="text-sm text-zinc-500">← Bandeja</Link>
-          <div className="truncate font-semibold">{contact ? contactLabel(contact) : "?"}</div>
-          <div className="text-xs text-zinc-500">{contact ? phonePretty(contact.phone) : ""}{contact?.is_test ? " · prueba" : ""}</div>
+      <ScrollToBottom targetId="chat-scroll" count={messages.length} />
+      {/* ── Chat ── */}
+      <div className="flex h-[calc(100dvh-6.5rem)] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm md:h-[calc(100dvh-4rem)]">
+        <header className="flex flex-wrap items-center gap-3 border-b border-zinc-200 bg-white px-4 py-3">
+          <Link href="/bandeja" className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100" aria-label="Volver a la bandeja">←</Link>
+          <Avatar name={name} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-semibold">{name}</div>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+              {contact ? phonePretty(contact.phone) : ""}
+              <Pill tone={conv.mode === "human" ? "blue" : "green"}>{conv.mode === "human" ? "Atiende una persona" : "Atiende el bot"}</Pill>
+              {contact?.is_test && <Pill>prueba</Pill>}
+            </div>
+          </div>
+          <div className="flex w-full items-center gap-2 sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">
+            <Link href={`/agenda?contacto=${conv.contact_id}`} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-center text-sm hover:bg-zinc-50">Agendar visita</Link>
+            <ModeToggle conversationId={conv.id} mode={conv.mode} />
+          </div>
+        </header>
+        {conv.needs_attention && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">⚠︎ {conv.attention_reason ?? "Necesita atención"}</div>
+        )}
+        {conv.mode === "ai" && channel && !channel.bot_enabled && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">El bot está apagado: este chat no recibe respuestas automáticas.</div>
+        )}
+        {/* En celular y pantallas medianas, ficha y bitácora plegables arriba del chat */}
+        <div className="lg:hidden">
+          <details className="border-b border-zinc-200 px-4 py-2 text-sm">
+            <summary className="cursor-pointer text-zinc-600">Ficha del lead · puntaje {leadScore.score}{lead.conflicts.length ? " · hay datos para revisar" : ""}</summary>
+            <div className="mt-2">{ficha}</div>
+          </details>
+          <details className="border-b border-zinc-200 px-4 py-2 text-sm">
+            <summary className="cursor-pointer text-zinc-600">Bitácora ({audit?.length ?? 0})</summary>
+            <div className="mt-2 max-h-64 overflow-y-auto">{bitacora}</div>
+          </details>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/agenda?contacto=${conv.contact_id}`} className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm">Agendar visita</Link>
-          <ModeToggle conversationId={conv.id} mode={conv.mode} />
-        </div>
-      </header>
-      {conv.needs_attention && (
-        <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{conv.attention_reason ?? "Necesita atención"}</div>
-      )}
-      {conv.mode === "ai" && channel && !channel.bot_enabled && (
-        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">El bot está apagado: este chat no recibe respuestas automáticas.</div>
-      )}
-      <details className="border-b border-zinc-200 bg-white px-3 py-2 text-sm">
-        <summary className="cursor-pointer text-zinc-600">
-          Ficha del lead · puntaje {leadScore.score}{lead.conflicts.length ? " · hay datos para revisar" : ""}{!leadRow ? " · sin armar" : ""}
-        </summary>
-        <div className="mt-2">
-          <LeadCard contactId={conv.contact_id} conversationId={conv.id} profile={lead.profile} conflicts={lead.conflicts} score={leadScore.score} breakdown={leadScore.breakdown} />
-        </div>
-      </details>
-      <details className="border-b border-zinc-200 bg-white px-3 py-2 text-sm">
-        <summary className="cursor-pointer text-zinc-600">Bitácora ({audit?.length ?? 0})</summary>
-        <ol className="mt-2 max-h-64 space-y-1 overflow-y-auto text-xs">
-          {(audit ?? []).map((a) => (
-            <li key={a.id} className="flex gap-2">
-              <span className="shrink-0 text-zinc-400">{timeShort(a.created_at)}</span>
-              <span className={EVENT_CLS[a.event] ?? "text-zinc-700"}>{a.summary}</span>
-              {auditDetail(a.event, a.details) && <span className="text-zinc-400">· {auditDetail(a.event, a.details)}</span>}
-            </li>
-          ))}
-        </ol>
-      </details>
-      <ol className="flex-1 space-y-2 overflow-y-auto p-3">
-        {messages.map((m) => {
-          const mine = m.author !== "client";
-          const out = m.outbound_messages?.[0];
-          const url = m.media_path ? urls.get(m.media_path) : undefined;
-          return (
-            <li key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-sm ${m.author === "client" ? "bg-white" : m.author === "ai" ? "bg-emerald-50" : m.author === "system" ? "bg-zinc-100 italic" : "bg-blue-50"}`}>
-                {m.author !== "client" && <div className="mb-0.5 text-[11px] font-medium text-zinc-500">{m.author === "ai" ? "Bot" : m.author === "human" ? "Equipo" : "Sistema"}</div>}
-                {m.kind === "audio" && (url ? <audio controls preload="none" src={url} className="max-w-full" /> : <span className="text-zinc-500">{KIND_LABEL.audio} (no disponible)</span>)}
-                {/* eslint-disable-next-line @next/next/no-img-element -- link firmado que vence: no pasa por el optimizador */}
-                {m.kind === "image" && (url ? <a href={url} target="_blank"><img src={url} alt="Imagen del cliente" className="max-h-64 rounded" /></a> : <span className="text-zinc-500">{KIND_LABEL.image} (no disponible)</span>)}
-                {m.kind !== "text" && m.kind !== "audio" && m.kind !== "image" && <div className="text-zinc-500">{KIND_LABEL[m.kind] ?? m.kind}</div>}
-                {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
-                {m.transcript && <p className="mt-1 border-t border-zinc-200 pt-1 text-xs text-zinc-600">Transcripción: {m.transcript}</p>}
-                <div className="mt-1 flex justify-end gap-2 text-[11px] text-zinc-400">
-                  {out && <span className={out.status === "failed" ? "text-red-600" : ""} title={out.error ?? undefined}>{STATUS_LABEL[out.status] ?? out.status}</span>}
-                  {out?.status === "failed" && (!windowClosed || !!out.template) && <RetryButton conversationId={conv.id} outboundId={out.id} />}
-                  <span>{timeShort(m.created_at)}</span>
+        <ol id="chat-scroll" className="flex-1 space-y-2 overflow-y-auto bg-[#efeae2] px-3 py-4 md:px-6">
+          {messages.map((m, i) => {
+            const mine = m.author !== "client";
+            const out = m.outbound_messages?.[0];
+            const url = m.media_path ? urls.get(m.media_path) : undefined;
+            const newDay = i === 0 || day(messages[i - 1].created_at) !== day(m.created_at);
+            const bubble = m.author === "client" ? "bg-white rounded-tl-sm" : m.author === "ai" ? "bg-[#d9fdd3] rounded-tr-sm"
+              : m.author === "system" ? "bg-zinc-100 italic" : "bg-sky-100 rounded-tr-sm";
+            return (
+              <li key={m.id}>
+                {newDay && <div className="my-3 text-center"><span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-medium text-zinc-500 shadow-sm">{day(m.created_at)}</span></div>}
+                <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm md:max-w-[70%] ${bubble}`}>
+                    {m.author !== "client" && <div className="mb-0.5 text-[11px] font-semibold text-zinc-500">{m.author === "ai" ? "Bot" : m.author === "human" ? "Equipo" : "Sistema"}</div>}
+                    {m.kind === "audio" && (url ? <audio controls preload="none" src={url} className="max-w-full" /> : <span className="text-zinc-500">{KIND_LABEL.audio} (no disponible)</span>)}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- link firmado que vence: no pasa por el optimizador */}
+                    {m.kind === "image" && (url ? <a href={url} target="_blank"><img src={url} alt="Imagen del cliente" className="max-h-64 rounded-lg" /></a> : <span className="text-zinc-500">{KIND_LABEL.image} (no disponible)</span>)}
+                    {m.kind !== "text" && m.kind !== "audio" && m.kind !== "image" && <div className="text-zinc-500">{KIND_LABEL[m.kind] ?? m.kind}</div>}
+                    {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                    {m.transcript && <p className="mt-1 border-t border-black/10 pt-1 text-xs text-zinc-600">Transcripción: {m.transcript}</p>}
+                    <div className="mt-1 flex justify-end gap-2 text-[11px] text-zinc-500">
+                      {out && <span className={out.status === "failed" ? "font-medium text-red-600" : ""} title={out.error ?? undefined}>{STATUS_LABEL[out.status] ?? out.status}</span>}
+                      {out?.status === "failed" && (!windowClosed || !!out.template) && <RetryButton conversationId={conv.id} outboundId={out.id} />}
+                      <span>{timeOfDay(m.created_at)}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </li>
-          );
-        })}
-        {messages.length === 0 && <li className="text-center text-sm text-zinc-500">Sin mensajes.</li>}
-      </ol>
-      <Composer conversationId={conv.id} mode={conv.mode} online={online} windowClosed={windowClosed} suggestion={suggestion} />
+              </li>
+            );
+          })}
+          {messages.length === 0 && <li className="text-center text-sm text-zinc-500">Sin mensajes.</li>}
+        </ol>
+        <Composer conversationId={conv.id} mode={conv.mode} online={online} windowClosed={windowClosed} suggestion={suggestion} />
+      </div>
+
+      {/* ── Costado (pantalla grande): ficha y bitácora ── */}
+      <aside className="hidden space-y-4 lg:block">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Ficha del lead</h2>
+            <span className={`rounded-lg px-2 py-0.5 text-sm font-semibold ${leadScore.score >= 60 ? "bg-emerald-600 text-white" : leadScore.score >= 30 ? "bg-emerald-100 text-emerald-900" : "bg-zinc-100 text-zinc-600"}`}>{leadScore.score}</span>
+          </div>
+          {ficha}
+        </section>
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold">Bitácora del bot</h2>
+          <div className="max-h-[45vh] overflow-y-auto pr-1">{bitacora}</div>
+        </section>
+      </aside>
     </div>
   );
 }

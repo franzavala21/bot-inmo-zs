@@ -37,7 +37,7 @@ export function Nav({ groups, footer }: { groups: NavGroup[]; footer: ReactNode 
     </nav>
   );
   const brand = (
-    <Link href="/bandeja" className="flex items-center gap-2.5">
+    <Link href="/inicio" className="flex items-center gap-2.5">
       <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-700 text-sm font-bold text-white">ZS</span>
       <span className="leading-tight">
         <span className="block text-sm font-semibold text-zinc-900">Zavala Seppey</span>

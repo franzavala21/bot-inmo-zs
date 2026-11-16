@@ -8,7 +8,7 @@ export function InterestedButton({ propertyId }: { propertyId: string }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   return (
-    <div className="mt-2 text-sm">
+    <div className="text-sm">
       <button disabled={pending} className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs disabled:opacity-40"
         onClick={() => start(async () => {
           const r = await findInterested(propertyId);
