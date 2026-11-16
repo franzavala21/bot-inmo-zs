@@ -289,4 +289,4 @@
 - `runFollowUps` corre con cada mensaje entrante (webhook, after), al abrir Avisos y Bandeja, y en el cron diario. Filtro barato antes de leer la ficha.
 - Simulación sin escribir (2026-11-16): 1 chat en franja (3 días); no aceptó avisos → no se arma.
 - [x] `0012_follow_ups.sql` aplicada.
-- [ ] Crear la plantilla `seguimiento_busqueda` en Meta cuando los dueños aprueben el texto.
+- [x] Plantilla `seguimiento_busqueda` creada en la WABA 2661 (2026-11-16, PENDING).
