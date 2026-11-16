@@ -166,7 +166,8 @@ export default async function Chat({ params }: { params: Promise<{ id: string }>
           })}
           {messages.length === 0 && <li className="text-center text-sm text-zinc-500">Sin mensajes.</li>}
         </ol>
-        <Composer conversationId={conv.id} mode={conv.mode} online={online} windowClosed={windowClosed} suggestion={suggestion} />
+        <Composer conversationId={conv.id} mode={conv.mode} online={online} windowClosed={windowClosed} suggestion={suggestion}
+          phone={contact && !contact.phone.startsWith("lid:") ? contact.phone : null} />
       </div>
 
       {/* ── Costado (pantalla grande): ficha y bitácora ── */}

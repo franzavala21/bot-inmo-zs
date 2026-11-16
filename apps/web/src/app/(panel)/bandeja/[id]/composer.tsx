@@ -2,7 +2,7 @@
 import { useRef, useState, useTransition } from "react";
 import { sendReply } from "../actions";
 
-export function Composer({ conversationId, mode, online, windowClosed = false, suggestion = null }: { conversationId: string; mode: "ai" | "human"; online: boolean; windowClosed?: boolean; suggestion?: string | null }) {
+export function Composer({ conversationId, mode, online, windowClosed = false, suggestion = null, phone = null }: { conversationId: string; mode: "ai" | "human"; online: boolean; windowClosed?: boolean; suggestion?: string | null; phone?: string | null }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -19,9 +19,17 @@ export function Composer({ conversationId, mode, online, windowClosed = false, s
 
   if (windowClosed) {
     return (
-      <div className="border-t border-zinc-200 bg-white p-3 text-sm text-amber-800">
-        Pasaron más de 24 h desde el último mensaje del cliente. WhatsApp solo deja mandarle plantillas aprobadas por Meta
-        (todavía no están armadas): hay que esperar a que vuelva a escribir.
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 bg-amber-50/60 p-3 text-sm text-amber-900">
+        <p className="min-w-0 flex-1">
+          Pasaron más de 24 h desde el último mensaje del cliente: desde el número del bot solo salen plantillas aprobadas por Meta
+          (Avisos y Consultas). Si querés contestarle ya, escribile desde tu WhatsApp.
+        </p>
+        {phone && (
+          <a href={`https://wa.me/${phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"
+            className="shrink-0 rounded-lg border border-emerald-600 bg-white px-3 py-1.5 font-medium text-emerald-800 hover:bg-emerald-50">
+            Escribirle desde mi WhatsApp
+          </a>
+        )}
       </div>
     );
   }

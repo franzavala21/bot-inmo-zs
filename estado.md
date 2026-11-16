@@ -314,3 +314,4 @@
   - **No repetir:** la búsqueda excluye los códigos ya mostrados en el chat (`shownCodes`, hasta 15). Si no queda nada distinto, la nota lo dice y propone ampliar.
 - `bot-try`: `otras_opciones` 3/3 con propiedades nuevas; `presupuesto_60` muestra 59, 50 y 60 mil.
 - Bandeja: puntaje del lead al lado del nombre (`lead_scores`).
+- 2026-11-16: las 4 plantillas de la WABA 2661 siguen PENDING (creadas al borrar la duplicada). Los reintentos de la consulta de Mercadolibre fallaron con 132001 por eso. Ahora "Reintentar" consulta el estado de la plantilla antes y avisa si Meta todavía no la aprobó. Con la ventana de 24 h cerrada, el chat ofrece "Escribirle desde mi WhatsApp" (`wa.me`).

@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { adminClient, drainForConversation, lastClientMessageAt, MetaClient, metaConfigFromEnv, SERVICE_WINDOW_MS } from "@inmo/core";
+import { adminClient, drainForConversation, lastClientMessageAt, MetaClient, metaConfigFromEnv, SERVICE_WINDOW_MS, TEMPLATE_STATUS_LABEL, templateReady, type TemplateSend } from "@inmo/core";
 import { requireOwner } from "@/lib/supabase/server";
 
 const MAX_LEN = 4000;
@@ -55,6 +55,14 @@ async function sendNow(conversationId: string, outboundId: string): Promise<{ ok
 export async function retryOutbound(conversationId: string, outboundId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await requireOwner();
   if (!user) return { ok: false, error: "No autorizado" };
+  // Con plantilla: si Meta todavía no la aprobó, avisar en vez de volver a fallar (error 132001).
+  const { data: o } = await adminClient().from("outbound_messages").select("template").eq("id", outboundId).maybeSingle();
+  const t = o?.template as TemplateSend | null;
+  if (t?.name) {
+    const cfg = metaConfigFromEnv();
+    const r = await templateReady(cfg ? new MetaClient(cfg) : null, t.name, t.language);
+    if (!r.ok) return { ok: false, error: `La plantilla «${t.name}» está ${TEMPLATE_STATUS_LABEL[r.status] ?? r.status}: reintentalo cuando Meta la apruebe` };
+  }
   const { error } = await adminClient().rpc("retry_outbound", { p_outbound_id: outboundId, p_user: user.id });
   if (error) return { ok: false, error: "No se pudo reintentar" };
   const result = (await isMetaConversation(conversationId)) ? await sendNow(conversationId, outboundId) : { ok: true };

@@ -1,0 +1,56 @@
+Corregido y en producción (commit `ac96d47`). Pasan los 142 tests y el build.
+
+**"¿Tenés otras opciones?"**
+- Ahora muestra propiedades **que no te mostró antes**. Si no queda ninguna distinta, te lo dice y te propone ampliar zona, presupuesto o tipo.
+- "60.000 dólares" se toma como **tope**, y muestra casas de 59, 50 y 60 mil. Si no hubiera nada, busca hasta un 25 % por encima y lo aclara.
+- El verificador ya no frena descripciones que están en la ficha. Sigue frenando si mezcla datos de dos propiedades.
+
+**Bandeja:** al lado de cada nombre aparece el **puntaje** del lead.
+
+---
+
+## Cómo funcionan las 24 h y las plantillas de WhatsApp
+
+### 1. La ventana de 24 h
+Cada vez que **el cliente te escribe**, se abre una ventana de **24 horas** desde ese mensaje.
+- **Dentro de la ventana:** le podés escribir lo que quieras (el bot o ustedes), todas las veces que haga falta, con links y sin plantillas. **No tiene costo de Meta.**
+- **La ventana se renueva** cada vez que el cliente vuelve a escribir.
+- **Pasadas las 24 h sin que escriba:** WhatsApp **no deja mandar texto libre**. Solo se puede usar una **plantilla aprobada por Meta**. Si intentás mandar texto igual, Meta lo rechaza y te baja la calidad del número. Por eso el panel bloquea la caja de texto pasadas las 24 h.
+
+### 2. Las plantillas
+Son mensajes con un texto fijo que **Meta revisa y aprueba antes de que se puedan usar**.
+- **Partes variables:** tienen huecos que se completan en cada envío, por ejemplo {nombre} o {propiedad}. El resto del texto no se puede cambiar. Para modificarlo hay que crear otra plantilla y esperar otra revisión.
+- **Revisión:** tarda de minutos a un par de días. Meta puede rechazarla, por ejemplo si parece engañosa o no dice quién la manda.
+- **Categorías:** **Marketing** (promociones, avisos de propiedades, seguimientos), **Utilidad** (confirmaciones, turnos) y **Autenticación**. Las nuestras son de **marketing**.
+- **Costo:** Meta cobra **cada plantilla que se envía**. Son unos centavos de dólar por mensaje y el precio depende del país; Meta publica la tabla. Para poder enviarlas, **la cuenta de WhatsApp tiene que tener una tarjeta cargada** en Meta.
+- **Cuando el cliente responde a una plantilla,** se abre la ventana de 24 h y el bot sigue la charla normalmente, ya sin costo.
+
+### 3. Las reglas de marketing (importante)
+- **Solo se puede mandar marketing a quien aceptó recibirlo.** Por eso el bot pregunta *"¿Querés que te avisemos por este WhatsApp cuando entre una propiedad parecida?"* y guarda la respuesta.
+- **Cada plantilla nuestra tiene el botón "No me interesa".** Quien lo toca queda dado de baja y el sistema no le vuelve a proponer mensajes.
+- **Si la gente bloquea o reporta el número,** Meta baja su **calidad** (hoy está en **verde**). Con calidad baja te limita los envíos, y en casos graves suspende el número. Por eso todo lo que inicia la inmobiliaria se aprueba de a uno.
+- **Límite diario:** hoy el número puede iniciar conversaciones con hasta **250 personas distintas por día**. El límite sube solo si mantenés buena calidad y verificás el negocio en Meta. En tu captura figuraba **"No verificado"**: conviene hacerlo (Configuración del negocio → Centro de seguridad → Verificación).
+
+### 4. Las plantillas que tenemos
+
+| Plantilla | Para qué | Cuándo se usa |
+|---|---|---|
+| `aviso_propiedad` | Avisar que entró una propiedad que coincide con lo que buscaba | En **Avisos**, si pasaron más de 24 h y el cliente aceptó avisos |
+| `consulta_portal` | Responder una consulta de Zonaprop o Mercadolibre (sin propiedad) | En **Consultas de portales** |
+| `consulta_portal_propiedad` | Lo mismo, con la propiedad y el link | En **Consultas**, cuando el email de Tokko dice qué propiedad consultó |
+| `seguimiento_busqueda` | "¿Seguís buscando…?" | Seguimiento a los **3 días** sin respuesta, solo a quien aceptó avisos |
+
+Las cuatro están **en revisión** en la cuenta nueva.
+
+### 5. Qué pasa en cada situación del panel
+- **El cliente escribió hace menos de 24 h:** todo sale como texto, desde el chat, Avisos o el seguimiento de las 20 h. Gratis.
+- **Pasaron 24 h y aceptó avisos:** sale con plantilla, cuando esté aprobada.
+- **Pasaron 24 h y no aceptó avisos:** no se le puede escribir desde el número del bot. Queda esperar a que vuelva a escribir, o escribirle desde tu WhatsApp con "Abrir en WhatsApp".
+- **Consultas de portales:** esas personas nunca le escribieron al bot, así que **siempre** necesitan plantilla. Mientras no esté aprobada, usá "Abrir en WhatsApp".
+
+### 6. Lo que tenés que tener al día
+1. **La tarjeta cargada** en Meta (Configuración de pagos). Sin ella, las plantillas no salen.
+2. **La verificación del negocio,** para subir el límite diario y dar más confianza.
+3. **Que la calidad del número siga en verde.** La ves en **Conexión**, en el panel.
+
+Escribime cuando quieras y reviso si Meta ya aprobó las plantillas. En ese momento hago la prueba para confirmar que ya salen.

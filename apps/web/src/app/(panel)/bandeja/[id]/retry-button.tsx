@@ -11,7 +11,7 @@ export function RetryButton({ conversationId, outboundId }: { conversationId: st
         onClick={() => start(async () => { const r = await retryOutbound(conversationId, outboundId); setError(r.ok ? null : r.error ?? "Error"); })}>
         {pending ? "Reintentando…" : "Reintentar"}
       </button>
-      {error && <span className="text-red-600" title={error}>· sigue sin salir</span>}
+      {error && <span className="text-red-600">· {error}</span>}
     </>
   );
 }
