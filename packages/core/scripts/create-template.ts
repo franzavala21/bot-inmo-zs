@@ -6,7 +6,7 @@ import { PORTAL_PROPERTY_TEMPLATE, PORTAL_TEMPLATE } from "../src/tokko/portal";
 const PROPERTY_TEMPLATE = process.argv.includes("portal_prop") ? PORTAL_PROPERTY_TEMPLATE : process.argv.includes("portal") ? PORTAL_TEMPLATE : AVISOS;
 
 const token = process.env.META_ACCESS_TOKEN;
-const waba = process.env.META_WABA_ID ?? "1859520905073768";
+const waba = process.env.META_WABA_ID ?? "2661699917608139";
 const v = process.env.META_GRAPH_VERSION ?? "v26.0";
 if (!token) throw new Error("Falta META_ACCESS_TOKEN");
 const api = (path: string, init?: RequestInit) =>

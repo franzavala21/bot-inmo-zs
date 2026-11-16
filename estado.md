@@ -268,3 +268,13 @@
 - [ ] El dueño revisa en WhatsApp Manager el método de pago y que las plantillas estén en la cuenta del número; si está todo bien, caso a soporte de Meta.
 - Plantilla nueva `consulta_portal_propiedad` (id 1699951634825708, PENDING): "Hola {{1}}! Soy Francisco, de Zavala Seppey. Vimos tu consulta en {{2}} por {{3}}: {{4}}…", con propiedad y link. Se usa cuando el email de Tokko dice qué propiedad consultó; si no, `consulta_portal`. El artículo lo arma `propertyPhrase` ("la casa", "el terreno").
 - "Abrir en WhatsApp" (`wa.me` con el mensaje y el link escritos) en cada consulta con teléfono válido que no pidió la baja: lo manda el dueño desde su WhatsApp (no queda en el panel ni lo sigue el bot). "Marcar como contactada" deja la consulta en Contactadas, con línea en la bitácora (`portal_contacted_manual`).
+
+## Causa del 132001: el número estaba en dos cuentas de WhatsApp (2026-11-16)
+- El negocio de Meta (1873249302968217) tenía 4 WABA. El número del bot (1426968407167616) aparecía en DOS: 1859520905073768 (con las plantillas y la app suscripta) y 2661699917608139 (sin plantillas ni app).
+- Hipótesis: al enviar, Meta resolvía el número por la 2661, sin plantillas → 132001. Se crearon las 3 plantillas también en la 2661 (avisos 2143950049555819, consulta_portal 1200359915646901, consulta_portal_propiedad 1888402522146890; PENDING).
+- El dueño BORRÓ la WABA 1859520905073768. Queda la 2661699917608139.
+  - Se suscribió la app a la 2661 (`subscribed_apps`): sin eso dejaban de llegar los mensajes.
+  - El número sigue CONNECTED/GREEN y el texto sale.
+- `META_WABA_ID` por defecto pasa a 2661699917608139 (`transport/meta.ts`, `scripts/create-template.ts`).
+- [ ] Confirmar que siguen llegando mensajes (que el dueño escriba al bot).
+- [ ] Cuando aprueben las plantillas en la 2661: prueba con número inexistente; el error ya no debería ser 132001.

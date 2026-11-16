@@ -216,7 +216,7 @@ export class MetaClient {
 // ───────── ¿Se puede usar la plantilla? (Meta rechaza las que están en revisión: error 132001) ─────────
 const statusCache = new Map<string, { status: string | null; at: number }>();
 const STATUS_TTL_MS = 5 * 60_000;
-export const META_WABA_ID = process.env.META_WABA_ID ?? "1859520905073768";
+export const META_WABA_ID = process.env.META_WABA_ID ?? "2661699917608139";
 
 /** Estado de la plantilla, con caché de 5 minutos. Si Meta no responde, devuelve "UNKNOWN" (no bloquea por un error de red). */
 export async function templateReady(client: MetaClient | null, name: string, language: string): Promise<{ ok: boolean; status: string }> {
