@@ -1,28 +1,13 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import {
-  adminClient, drainForConversation, MetaClient, metaConfigFromEnv, PORTAL_TEMPLATE, portalTemplateParams,
-  renderPortalTemplate, seedLeadFromPortal, syncPortalLeads, TEMPLATE_STATUS_LABEL, templateReady,
-  PORTAL_PROPERTY_TEMPLATE, PUBLIC_COLUMNS, portalPropertyParams, renderPortalPropertyTemplate, type PublicRow,
+  adminClient, drainForConversation, MetaClient, metaConfigFromEnv, portalMessageFor, seedLeadFromPortal, syncPortalLeads,
+  TEMPLATE_STATUS_LABEL, templateReady,
 } from "@inmo/core";
 
 import { requireOwner } from "@/lib/supabase/server";
 
 const CHANNEL = "ventas";
-
-/**
- * Última consulta por email de Tokko de esta persona (por teléfono o email): trae la propiedad.
- * NO exportar: en un archivo "use server" todo lo exportado es una acción que se puede llamar desde afuera.
- */
-async function inquiryFor(db: ReturnType<typeof adminClient>, phone: string | null, email: string | null) {
-  const pick = "property_codes, property_title, message, received_at";
-  const [byPhone, byEmail] = await Promise.all([
-    phone ? db.from("portal_inquiries").select(pick).eq("phone", phone).order("received_at", { ascending: false }).limit(1).maybeSingle() : null,
-    email ? db.from("portal_inquiries").select(pick).eq("email", email.toLowerCase()).order("received_at", { ascending: false }).limit(1).maybeSingle() : null,
-  ]);
-  const found = [byPhone?.data, byEmail?.data].filter(Boolean) as { received_at: string; property_codes: string[] }[];
-  return found.sort((a, b) => b.received_at.localeCompare(a.received_at))[0] ?? null;
-}
 
 /** Trae de Tokko las consultas nuevas (no le escribe a nadie). */
 export async function refreshPortalLeads(): Promise<{ ok: boolean; fetched?: number; error?: string }> {
@@ -48,28 +33,16 @@ export async function contactPortalLead(leadId: string): Promise<{ ok: boolean; 
   if (l.operation === "rent") return { ok: false, error: "Es de alquiler: la atiende otra persona" };
 
   // Si llegó el email de Tokko, se sabe la propiedad: va en el mensaje (con link) y el bot queda sabiendo de qué ficha hablan.
-  const inq = await inquiryFor(db, l.phone, l.email);
-  const codes = (inq?.property_codes ?? []) as string[];
-  const { data: propRow } = codes.length
-    ? await db.from("properties_public").select(PUBLIC_COLUMNS).in("reference_code", codes).limit(1).maybeSingle()
-    : { data: null };
-  const prop = propRow as unknown as PublicRow | null;
-  const link = prop ? prop.web_url || prop.public_url : null;
-  const T = prop && link ? PORTAL_PROPERTY_TEMPLATE : PORTAL_TEMPLATE;
+  const { template, body, codes, prop } = await portalMessageFor(db, l);
 
   // Meta rechaza una plantilla que no está habilitada (error 132001): no se encola.
   const cfg = metaConfigFromEnv();
-  const ready = await templateReady(cfg ? new MetaClient(cfg) : null, T.name, T.language);
+  const ready = await templateReady(cfg ? new MetaClient(cfg) : null, template.name, template.language);
   if (!ready.ok) return { ok: false, error: `La plantilla está ${TEMPLATE_STATUS_LABEL[ready.status] ?? ready.status}: todavía no se puede enviar. Usá "Abrir en WhatsApp".` };
 
-  const params = prop && link
-    ? portalPropertyParams({ name: l.name, origin: l.origin }, prop, link)
-    : portalTemplateParams({ name: l.name, origin: l.origin, zones: prop?.zone ? [prop.zone] : l.zones ?? [] });
-  const body = prop && link ? renderPortalPropertyTemplate(params) : renderPortalTemplate(params);
-  const template = { name: T.name, language: T.language, params, buttons: T.buttons.map((b) => b.payload) };
   const { data, error } = await db.rpc("contact_portal_lead", {
     p_lead_id: leadId, p_user: user.id, p_channel_slug: CHANNEL, p_body: body, p_template: template,
-    p_property_codes: prop ? [prop.reference_code] : [],
+    p_property_codes: codes,
   });
   if (error) {
     const m = error.message;

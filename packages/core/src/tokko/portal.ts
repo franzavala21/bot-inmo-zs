@@ -4,6 +4,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { TokkoClient, type TokkoContact } from "./client";
 import { firstName } from "../bot/name";
+import type { PublicRow } from "../bot/facts";
+import { PUBLIC_COLUMNS } from "../retrieval/search";
+import type { TemplateSend } from "../transport/meta";
 
 /** Teléfono argentino → formato de WhatsApp 549 + área + número (10 dígitos). null si no se puede saber. */
 export function normalizeArPhone(raw: string | null | undefined): string | null {
@@ -185,4 +188,37 @@ export function renderPortalPropertyTemplate(params: string[]): string {
 /** Link para abrir el chat en el WhatsApp del dueño con el mensaje ya escrito (lo manda él, desde su teléfono). */
 export function waMeLink(phone: string, text: string): string {
   return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
+}
+
+/**
+ * Mensaje para escribirle a una consulta de portal. Si llegó el email de Tokko con la propiedad (y la ficha tiene link),
+ * va la plantilla con la propiedad y su link, para que sepa qué consultó; si no, la genérica.
+ * Lee propiedades solo de properties_public.
+ */
+export async function portalMessageFor(
+  db: SupabaseClient,
+  l: { name: string | null; origin: string | null; zones: string[] | null; phone: string | null; email: string | null },
+): Promise<{ template: TemplateSend; body: string; codes: string[]; prop: PublicRow | null }> {
+  const pick = "property_codes, received_at";
+  const [byPhone, byEmail] = await Promise.all([
+    l.phone ? db.from("portal_inquiries").select(pick).eq("phone", l.phone).order("received_at", { ascending: false }).limit(1).maybeSingle() : null,
+    l.email ? db.from("portal_inquiries").select(pick).eq("email", l.email.toLowerCase()).order("received_at", { ascending: false }).limit(1).maybeSingle() : null,
+  ]);
+  const found = [byPhone?.data, byEmail?.data].filter(Boolean) as { received_at: string; property_codes: string[] }[];
+  const codes = found.sort((a, b) => b.received_at.localeCompare(a.received_at))[0]?.property_codes ?? [];
+  const { data: row } = codes.length
+    ? await db.from("properties_public").select(PUBLIC_COLUMNS).in("reference_code", codes).limit(1).maybeSingle()
+    : { data: null };
+  const prop = row as unknown as PublicRow | null;
+  const link = prop ? prop.web_url || prop.public_url : null;
+  if (prop && link) {
+    const params = portalPropertyParams(l, prop, link);
+    const T = PORTAL_PROPERTY_TEMPLATE;
+    return { template: { name: T.name, language: T.language, params, buttons: T.buttons.map((b) => b.payload) },
+      body: renderPortalPropertyTemplate(params), codes: prop.reference_code ? [prop.reference_code] : [], prop };
+  }
+  const params = portalTemplateParams({ name: l.name, origin: l.origin, zones: prop?.zone ? [prop.zone] : l.zones ?? [] });
+  const T = PORTAL_TEMPLATE;
+  return { template: { name: T.name, language: T.language, params, buttons: T.buttons.map((b) => b.payload) },
+    body: renderPortalTemplate(params), codes: prop?.reference_code ? [prop.reference_code] : [], prop };
 }
